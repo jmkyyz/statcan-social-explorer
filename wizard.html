@@ -1,0 +1,1215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>StatCan Social Explorer — Series Wizard</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,700;1,9..144,300&display=swap');
+
+  :root {
+    --bg: #f0ead6;
+    --surface: #faf7ee;
+    --surface2: #e6dfc8;
+    --border: #d0c8a8;
+    --accent: #0f766e;
+    --accent2: #115e59;
+    --accent3: #dc2626;
+    --text: #2a2010;
+    --muted: #7d7060;
+    --success: #16a34a;
+    --admin: #b45309;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    font-size: 13px;
+  }
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 18px 28px;
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    background: var(--surface);
+  }
+  header h1 {
+    font-family: 'Fraunces', serif;
+    font-size: 21px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: -0.5px;
+  }
+  header span.sub { color: var(--muted); font-size: 11px; letter-spacing: 0.5px; }
+  .admin-badge {
+    background: var(--admin); color: #fff;
+    font-size: 9px; font-weight: 600; letter-spacing: 0.8px;
+    text-transform: uppercase; padding: 2px 6px; border-radius: 3px;
+  }
+  .header-right { margin-left: auto; font-size: 11px; color: var(--muted); }
+  .header-right a { color: var(--accent2); text-decoration: none; margin-left: 12px; }
+  .header-right a:hover { text-decoration: underline; }
+
+  .wrap { max-width: 960px; margin: 0 auto; padding: 22px 24px 60px; }
+
+  .stepper { display: flex; gap: 6px; align-items: center; margin-bottom: 20px; flex-wrap: wrap; }
+  .step-pill {
+    font-size: 12px; padding: 4px 12px; border-radius: 14px;
+    border: 1px solid var(--border); color: var(--muted); background: var(--surface);
+  }
+  .step-pill.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 500; }
+  .step-pill.done { border-color: var(--success); color: var(--success); }
+  .step-sep { color: var(--muted); font-size: 11px; }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 18px 20px;
+    margin-bottom: 14px;
+  }
+  .panel h2 { font-family: 'Fraunces', serif; font-size: 16px; font-weight: 700; margin-bottom: 10px; }
+  .hint { font-size: 12px; color: var(--muted); line-height: 1.6; }
+
+  .mode-tabs { display: flex; gap: 6px; margin-bottom: 14px; }
+  .mode-tab {
+    padding: 6px 14px; border: 1px solid var(--border); border-radius: 6px;
+    cursor: pointer; font-size: 12px; color: var(--muted); background: var(--surface2);
+  }
+  .mode-tab.active { border-color: var(--accent2); color: var(--accent2); background: rgba(15,118,110,0.08); font-weight: 500; }
+
+  input[type="text"], input[type="password"], select {
+    width: 100%; padding: 8px 10px;
+    background: var(--surface2); border: 1px solid var(--border); border-radius: 5px;
+    color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 13px; outline: none;
+  }
+  input:focus, select:focus { border-color: var(--accent2); }
+  label.fld { display: block; font-size: 11px; color: var(--muted); margin-bottom: 4px; letter-spacing: 0.3px; }
+
+  .results { margin-top: 10px; max-height: 420px; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); }
+  .result-row {
+    padding: 9px 12px; border-bottom: 1px solid rgba(0,0,0,0.06); cursor: pointer;
+    display: flex; gap: 10px; align-items: baseline;
+  }
+  .result-row:hover { background: rgba(15,118,110,0.06); }
+  .result-row:last-child { border-bottom: none; }
+  .result-pid { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--accent2); white-space: nowrap; }
+  .result-title { flex: 1; font-size: 12px; line-height: 1.4; }
+  .result-meta { font-size: 11px; color: var(--muted); white-space: nowrap; }
+  .badge-archived { font-size: 9px; background: var(--surface2); border: 1px solid var(--border); color: var(--muted); padding: 1px 5px; border-radius: 3px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+  .table-banner { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; margin-bottom: 14px; }
+  .table-banner .pid { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--accent2); }
+  .table-banner .title { font-weight: 500; font-size: 14px; }
+  .table-banner .meta { font-size: 11px; color: var(--muted); }
+
+  .dim-panel { border: 1px solid var(--border); border-radius: 6px; padding: 12px 14px; margin-bottom: 12px; background: var(--surface); }
+  .dim-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+  .dim-title { font-size: 13px; font-weight: 500; }
+  .dim-count { font-size: 11px; color: var(--muted); }
+  .dim-locked-note { font-size: 11px; color: var(--admin); margin-bottom: 6px; }
+  .preset-chips { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 8px; align-items: center; }
+  .pchip {
+    font-size: 11px; padding: 3px 10px; border-radius: 12px; cursor: pointer;
+    border: 1px solid var(--border); color: var(--muted); background: var(--surface);
+  }
+  .pchip:hover { border-color: var(--accent); color: var(--accent); }
+  .pchip.active { background: rgba(15,118,110,0.1); border-color: var(--accent); color: var(--accent); font-weight: 500; }
+  .member-search { margin-bottom: 6px; }
+  .member-search input { padding: 5px 9px; font-size: 12px; }
+  .level-row {
+    display: flex; gap: 12px; flex-wrap: wrap; align-items: center;
+    font-size: 11px; color: var(--muted); margin-bottom: 8px;
+    padding: 6px 8px; background: rgba(15,118,110,0.04);
+    border: 1px dashed var(--border); border-radius: 5px;
+  }
+  .lvl-box { display: flex; gap: 5px; align-items: center; cursor: pointer; white-space: nowrap; }
+  .lvl-box input { width: auto; cursor: pointer; margin: 0; }
+  .member-list { max-height: 230px; overflow-y: auto; border-top: 1px solid rgba(0,0,0,0.06); padding-top: 6px; }
+  .member-item { display: flex; align-items: baseline; gap: 7px; padding: 2px 0; font-size: 12px; line-height: 1.5; }
+  .member-item input { width: auto; cursor: pointer; }
+  .member-item label { cursor: pointer; flex: 1; }
+  .member-item .lvl { color: var(--muted); font-size: 10px; }
+  .member-item.locked { opacity: 0.55; }
+  .term-badge { font-size: 9px; color: var(--accent3); border: 1px solid var(--accent3); padding: 0 4px; border-radius: 3px; }
+
+  .footer-bar {
+    position: sticky; bottom: 0;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 12px 16px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
+  }
+  .combo-count { font-size: 13px; font-weight: 500; }
+  .combo-detail { font-size: 11px; color: var(--muted); flex: 1; min-width: 160px; }
+  .warn { color: var(--admin); font-size: 12px; }
+  .err  { color: var(--accent3); font-size: 12px; }
+
+  .btn {
+    padding: 9px 18px; border: none; border-radius: 6px; cursor: pointer;
+    font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500;
+  }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: var(--accent2); }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-secondary { background: var(--surface2); color: var(--muted); border: 1px solid var(--border); }
+  .btn-secondary:hover { color: var(--text); border-color: var(--muted); }
+  .minibtn { padding: 1px 8px !important; font-size: 11px !important; font-weight: 500; }
+  .ord { display: inline-flex; flex-direction: column; line-height: 0; flex-shrink: 0; }
+  .ordbtn { border: none; background: none; cursor: pointer; font-size: 9px; color: var(--muted); padding: 0 2px; line-height: 1.15; }
+  .ordbtn:disabled { opacity: 0.25; cursor: default; }
+  .ordbtn:hover:not(:disabled) { color: var(--accent2); }
+  .btn-save { background: var(--success); color: #fff; }
+  .btn-save:hover { background: #15803d; }
+  .btn-save:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .fields-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 14px; }
+
+  table.preview { width: 100%; border-collapse: collapse; font-size: 11px; }
+  table.preview th {
+    padding: 6px 9px; text-align: left; color: var(--muted); font-weight: 400;
+    text-transform: uppercase; letter-spacing: 0.6px; font-size: 10px;
+    border-bottom: 1px solid var(--border); background: var(--surface2);
+    position: sticky; top: 0;
+  }
+  table.preview td { padding: 5px 9px; border-bottom: 1px solid rgba(0,0,0,0.06); }
+  .preview-wrap { max-height: 300px; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px; margin-bottom: 12px; }
+
+  .progress-track { height: 8px; background: var(--surface2); border-radius: 4px; overflow: hidden; margin: 10px 0; }
+  .progress-fill { height: 100%; background: var(--accent); width: 0%; transition: width 0.3s; }
+
+  .result-summary { display: flex; gap: 18px; flex-wrap: wrap; margin: 12px 0; }
+  .stat { background: var(--surface2); border-radius: 6px; padding: 10px 16px; }
+  .stat .n { font-size: 20px; font-weight: 500; font-family: 'DM Mono', monospace; }
+  .stat .l { font-size: 11px; color: var(--muted); }
+  .stat.ok .n { color: var(--success); }
+  .stat.skip .n { color: var(--admin); }
+  .stat.miss .n { color: var(--muted); }
+
+  .toast {
+    position: fixed; bottom: 22px; right: 22px;
+    padding: 11px 16px; border-radius: 6px;
+    font-size: 12px; z-index: 999; max-width: 320px;
+    animation: slideIn 0.18s ease;
+  }
+  .toast.error   { background: var(--accent3); color: #fff; }
+  .toast.success { background: var(--success); color: #fff; }
+  .toast.info    { background: var(--accent2); color: #fff; }
+  @keyframes slideIn { from{transform:translateY(8px);opacity:0} to{transform:translateY(0);opacity:1} }
+
+  .spinner {
+    display: inline-block; width: 13px; height: 13px;
+    border: 2px solid var(--border); border-top-color: var(--accent);
+    border-radius: 50%; animation: spin 0.7s linear infinite;
+    vertical-align: middle; margin-right: 6px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .step-view { display: none; }
+  .step-view.visible { display: block; }
+  #liveBanner {
+    display: none; background: #b91c1c; color: #fff; text-align: center;
+    padding: 9px 14px; font-size: 13px; font-weight: 600; letter-spacing: 0.2px;
+  }
+  body.is-live header { box-shadow: inset 0 -3px 0 #b91c1c; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>StatCan Social Explorer</h1>
+  <span class="sub">SERIES WIZARD</span>
+  <span class="admin-badge">Admin</span>
+  <div class="header-right">
+    <span id="adminStatus"></span>
+    <a href="/">Explorer</a>
+  </div>
+</header>
+
+<div id="liveBanner">⚠ You are on the LIVE site. Large catalog edits are blocked here — do rebuilds on the local wizard (localhost:5004/wizard) and push.</div>
+
+<div id="lockScreen" style="display:none; position:fixed; inset:0; background:var(--bg); z-index:100; align-items:center; justify-content:center;">
+  <div class="panel" style="width:340px; text-align:center;">
+    <div style="font-size:26px; margin-bottom:8px;">🔒</div>
+    <h2 style="margin-bottom:6px;">Series Wizard</h2>
+    <p class="hint" style="margin-bottom:14px;">This is an admin tool for managing the StatCan Social Explorer catalog. Enter the admin key to continue.</p>
+    <input type="password" id="lockKeyInput" placeholder="Admin key" style="margin-bottom:10px;" onkeydown="if(event.key==='Enter')unlockWizard()">
+    <button class="btn btn-primary" style="width:100%;" onclick="unlockWizard()">Unlock</button>
+    <div id="lockError" class="err" style="margin-top:10px; height:16px;"></div>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <div class="stepper">
+    <span class="step-pill active" id="pill1">1 · Find table</span>
+    <span class="step-sep">→</span>
+    <span class="step-pill" id="pill2">2 · Choose breakdowns</span>
+    <span class="step-sep">→</span>
+    <span class="step-pill" id="pill3">3 · Preview &amp; label</span>
+    <span class="step-sep">→</span>
+    <span class="step-pill" id="pill4">4 · Resolve &amp; save</span>
+  </div>
+
+  <!-- ════════ STEP 1 ════════ -->
+  <div class="step-view visible" id="step1">
+    <div class="panel">
+      <div class="mode-tabs">
+        <div class="mode-tab active" id="modeNew" onclick="setMode('new')">New series</div>
+        <div class="mode-tab" id="modeExtend" onclick="setMode('extend')">Extend existing series</div>
+        <div class="mode-tab" id="modeManage" onclick="setMode('manage')">Manage catalog</div>
+      </div>
+
+      <div id="newModeBox">
+        <label class="fld">Search StatCan tables — keywords or a table ID like 18-10-0004</label>
+        <input type="text" id="cubeSearch" placeholder="e.g. consumer price index, vehicle registrations, 14-10-0287" autocomplete="off">
+        <div id="searchStatus" class="hint" style="margin-top:8px"></div>
+        <div class="results" id="searchResults" style="display:none"></div>
+      </div>
+
+      <div id="extendModeBox" style="display:none">
+        <label class="fld">Pick one of your existing series to deepen or widen</label>
+        <select id="extendSelect" onchange="onExtendPick(this.value)">
+          <option value="">Loading catalog…</option>
+        </select>
+        <div id="extendInfo" class="hint" style="margin-top:8px"></div>
+      </div>
+
+      <div id="manageModeBox" style="display:none">
+        <div class="hint" style="margin-bottom:10px">
+          Reorder with ▲▼ then <b>Save order</b>; rename with ✎; or delete. Every change
+          writes a timestamped backup of Vectors.xlsx first. Charts already on screen keep
+          working until the page is refreshed.
+        </div>
+        <div id="manageSaveBar" style="display:none; margin-bottom:10px; align-items:center; gap:8px;">
+          <button class="btn btn-primary" id="saveOrderBtn" onclick="saveOrder()">Save order</button>
+          <button class="btn btn-secondary" onclick="renderManageList(true)">Discard</button>
+          <span class="hint" style="color:var(--accent3)">Order changed — not yet saved.</span>
+        </div>
+        <div id="manageList" class="hint">Loading catalog…</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════ STEP 2 ════════ -->
+  <div class="step-view" id="step2">
+    <div class="panel">
+      <div class="table-banner" id="tableBanner"></div>
+      <div class="hint" style="margin-bottom:12px">
+        Tick the members you want for each dimension. Dimensions with two or more selections become
+        drill-down dropdowns in the app (max 5); a dimension with exactly one selection is locked to that value.
+      </div>
+      <div id="dimPanels"></div>
+    </div>
+    <div class="footer-bar">
+      <span class="combo-count" id="comboCount">0 series rows</span>
+      <span class="combo-detail" id="comboDetail"></span>
+      <span id="comboWarn"></span>
+      <button class="btn btn-secondary" onclick="goStep(1)">Back</button>
+      <button class="btn btn-primary" id="toStep3Btn" onclick="goStep(3)" disabled>Preview rows →</button>
+    </div>
+  </div>
+
+  <!-- ════════ STEP 3 ════════ -->
+  <div class="step-view" id="step3">
+    <div class="panel">
+      <h2>Label the series</h2>
+      <div class="fields-grid">
+        <div>
+          <label class="fld">Category (existing or new)</label>
+          <input type="text" id="fCategory" list="catList" autocomplete="off">
+          <datalist id="catList"></datalist>
+        </div>
+        <div>
+          <label class="fld">Series ID (internal, no spaces)</label>
+          <input type="text" id="fSeriesId" autocomplete="off">
+        </div>
+        <div>
+          <label class="fld">Series name (shown in the app)</label>
+          <input type="text" id="fSeriesName" autocomplete="off">
+        </div>
+        <div>
+          <label class="fld">Frequency</label>
+          <select id="fFreq">
+            <option value="M">Monthly</option>
+            <option value="Q">Quarterly</option>
+            <option value="D">Daily</option>
+            <option value="A">Annual</option>
+          </select>
+        </div>
+      </div>
+      <div class="hint" id="dimOrderNote" style="margin-bottom:10px"></div>
+      <div class="preview-wrap">
+        <table class="preview" id="previewTable"></table>
+      </div>
+      <div class="hint" id="previewMore"></div>
+    </div>
+    <div class="footer-bar">
+      <span class="combo-detail" id="step3Detail"></span>
+      <button class="btn btn-secondary" onclick="goStep(2)">Back</button>
+      <button class="btn btn-primary" onclick="startResolve()">Resolve vectors →</button>
+    </div>
+  </div>
+
+  <!-- ════════ STEP 4 ════════ -->
+  <div class="step-view" id="step4">
+    <div class="panel">
+      <h2>Resolve &amp; save</h2>
+      <div id="resolveStatus" class="hint"></div>
+      <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+      <div class="result-summary" id="resolveSummary" style="display:none"></div>
+      <div id="saveResult"></div>
+    </div>
+    <div class="footer-bar">
+      <span class="combo-detail" id="step4Detail"></span>
+      <button class="btn btn-secondary" onclick="goStep(3)" id="backBtn4">Back</button>
+      <button class="btn btn-save" id="saveBtn" onclick="doSave()" disabled>Add to catalog</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const PROXY_URL = window.location.protocol === 'file:' ? 'http://localhost:5004' : '';
+// Default social-topic buckets — offered in the category picker even when the
+// catalog is empty so new series land in a consistent taxonomy.
+const DEFAULT_SOCIAL_CATS = ['Health', 'Education', 'Indigenous Statistics',
+  'Justice & Safety', 'Demographics & Population', 'Social Assistance & Income Support'];
+
+const state = {
+  mode: 'new',
+  cubes: null,            // slimmed table list
+  table: null,            // { pid, title, freq, start, end }
+  meta: null,             // /api/table-metadata response
+  dims: [],               // [{ pos, name, members:[{id,parent,name,depth,terminated}], order:[...DFS ids], byId:{} }]
+  selected: [],           // per dim index → Set of memberId
+  lockedDims: [],         // per dim index → true when extend-mode locks it
+  extend: null,           // extend-mode context
+  catalog: null,          // /api/catalog summary
+  combos: [],             // generated candidate rows
+  resolved: null,         // rows with vectors after resolution
+  info: { adminRequired: false, githubConfigured: false },
+  adminKey: '',
+};
+
+function adminHeaders() {
+  return state.adminKey ? { 'X-Admin-Key': state.adminKey } : {};
+}
+
+async function verifyKey(key) {
+  try {
+    const r = await fetch(`${PROXY_URL}/api/verify-key`, {
+      method: 'POST', headers: key ? { 'X-Admin-Key': key } : {},
+    });
+    return (await r.json()).ok === true;
+  } catch (e) { return false; }
+}
+
+async function unlockWizard() {
+  const key = $('lockKeyInput').value.trim();
+  $('lockError').textContent = '';
+  if (!key) { $('lockError').textContent = 'Enter a key'; return; }
+  if (await verifyKey(key)) {
+    state.adminKey = key;
+    localStorage.setItem('wizardAdminKey', key);
+    $('lockScreen').style.display = 'none';
+  } else {
+    $('lockError').textContent = state.info.keyConfigured === false
+      ? 'No admin key is configured on the server yet'
+      : 'Incorrect key';
+  }
+}
+
+// ── helpers ──────────────────────────────────────────────
+function $(id) { return document.getElementById(id); }
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function slugify(str) { return str.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, ''); }
+function formatTableId(pid) {
+  const s = String(pid);
+  return s.length === 8 ? `${s.slice(0,2)}-${s.slice(2,4)}-${s.slice(4,8)}-01` : s;
+}
+function toast(msg, type = 'info') {
+  const t = document.createElement('div');
+  t.className = `toast ${type}`;
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 4200);
+}
+function freqLetter(label) {
+  return { Monthly: 'M', Quarterly: 'Q', Daily: 'D', Annual: 'A', Weekly: 'M', Biweekly: 'M', 'Semi-annual': 'Q' }[label] || 'M';
+}
+
+// ── init ─────────────────────────────────────────────────
+async function init() {
+  try {
+    const r = await fetch(`${PROXY_URL}/api/wizard-info`);
+    state.info = await r.json();
+  } catch (e) { /* defaults stand */ }
+  $('adminStatus').textContent = state.info.adminRequired
+    ? 'Admin access'
+    : 'Open mode (local)';
+
+  // Loud LIVE indicator: adminRequired is only true on the deployed server.
+  if (state.info.adminRequired) {
+    $('liveBanner').style.display = 'block';
+    document.body.classList.add('is-live');
+  }
+
+  if (state.info.adminRequired) {
+    const stored = localStorage.getItem('wizardAdminKey') || '';
+    if (stored && await verifyKey(stored)) {
+      state.adminKey = stored;
+    } else {
+      $('lockScreen').style.display = 'flex';
+      $('lockKeyInput').focus();
+    }
+  }
+  loadCatalog();
+}
+
+async function loadCatalog() {
+  try {
+    const r = await fetch(`${PROXY_URL}/api/catalog`);
+    state.catalog = await r.json();
+    if (state.catalog.error) throw new Error(state.catalog.error);
+    $('catList').innerHTML = [...new Set([...state.catalog.categories, ...DEFAULT_SOCIAL_CATS])].map(c => `<option value="${esc(c)}">`).join('');
+    const byCat = {};
+    for (const s of state.catalog.series) (byCat[s.category] = byCat[s.category] || []).push(s);
+    $('extendSelect').innerHTML = '<option value="">Choose a series…</option>' +
+      Object.entries(byCat).map(([cat, list]) =>
+        `<optgroup label="${esc(cat)}">` +
+        list.map(s => `<option value="${esc(s.seriesId)}">${esc(s.seriesName || s.seriesId)} (${s.rowCount} rows)</option>`).join('') +
+        '</optgroup>').join('');
+  } catch (e) {
+    state.catalog = null;
+    $('extendSelect').innerHTML = '<option value="">Catalog unavailable — reopen this tab to retry</option>';
+    toast(`Could not load catalog: ${e.message}`, 'error');
+  }
+}
+
+function setMode(m) {
+  state.mode = m;
+  $('modeNew').classList.toggle('active', m === 'new');
+  $('modeExtend').classList.toggle('active', m === 'extend');
+  $('modeManage').classList.toggle('active', m === 'manage');
+  $('newModeBox').style.display    = m === 'new'    ? '' : 'none';
+  $('extendModeBox').style.display = m === 'extend' ? '' : 'none';
+  $('manageModeBox').style.display = m === 'manage' ? '' : 'none';
+  if (m === 'manage') renderManageList();
+}
+
+// ── manage mode: reorder / rename / delete ───────────────────
+// A client-side working model (state.manageModel) backs reordering so the user
+// can shuffle ▲▼ freely and commit the final order in ONE file rewrite.
+function buildManageModel() {
+  const byCat = {}; const order = [];
+  for (const s of state.catalog.series) {
+    if (!byCat[s.category]) { byCat[s.category] = []; order.push(s.category); }
+    byCat[s.category].push({ seriesId: s.seriesId, seriesName: s.seriesName, tableId: s.tableId, rowCount: s.rowCount });
+  }
+  state.manageModel = order.map(name => ({ name, series: byCat[name] }));
+  state.manageOrig = manageSig();
+}
+function manageSig() {
+  return (state.manageModel || []).map(c => c.name + '>' + c.series.map(s => s.seriesId).join(',')).join('|');
+}
+function manageDirty() { return !!state.manageModel && manageSig() !== state.manageOrig; }
+
+async function renderManageList(rebuild) {
+  if (!state.catalog || !state.catalog.series) {
+    $('manageList').innerHTML = '<span class="spinner"></span>Loading catalog…';
+    await loadCatalog();
+  }
+  if (!state.catalog || !state.catalog.series) {
+    $('manageList').innerHTML = `Catalog unavailable — the server may be restarting after a recent save.
+      <a href="#" onclick="renderManageList(true); return false" style="color:var(--accent2)">Retry</a>`;
+    return;
+  }
+  if (rebuild || !state.manageModel) buildManageModel();
+  const cats = state.manageModel;
+  const enc = v => JSON.stringify(v).replace(/"/g, '&quot;');
+
+  $('manageList').innerHTML = cats.map((c, ci) => {
+    const catRows = c.series.reduce((n, s) => n + s.rowCount, 0);
+    return `
+    <div style="margin-bottom:14px">
+      <div style="display:flex; align-items:center; gap:8px; padding:6px 0; border-bottom:1px solid var(--border);">
+        <span class="ord">
+          <button class="ordbtn" ${ci === 0 ? 'disabled' : ''} onclick="moveCat(${ci},-1)" title="Move up">▲</button>
+          <button class="ordbtn" ${ci === cats.length - 1 ? 'disabled' : ''} onclick="moveCat(${ci},1)" title="Move down">▼</button>
+        </span>
+        <span style="font-weight:500; font-size:13px; color:var(--text)">${esc(c.name)}</span>
+        <span style="font-size:11px">${c.series.length} series · ${catRows.toLocaleString()} rows</span>
+        <button class="btn btn-secondary minibtn" onclick="renameTarget('category',${enc(c.name)},${enc(c.name)})" title="Rename category">✎</button>
+        <button class="btn btn-secondary minibtn" style="margin-left:auto; color:var(--accent3); border-color:var(--accent3)"
+          onclick="deleteTarget('category',${enc(c.name)},${catRows})">Delete</button>
+      </div>
+      ${c.series.map((s, si) => `
+      <div style="display:flex; align-items:center; gap:8px; padding:5px 0 5px 12px; border-bottom:1px solid rgba(0,0,0,0.05);">
+        <span class="ord">
+          <button class="ordbtn" ${si === 0 ? 'disabled' : ''} onclick="moveSeries(${ci},${si},-1)" title="Move up">▲</button>
+          <button class="ordbtn" ${si === c.series.length - 1 ? 'disabled' : ''} onclick="moveSeries(${ci},${si},1)" title="Move down">▼</button>
+        </span>
+        <span style="font-size:12px; color:var(--text)">${esc(s.seriesName || s.seriesId)}</span>
+        <span style="font-family:'DM Mono',monospace; font-size:10px;">${esc(s.seriesId)}</span>
+        <span style="font-size:11px;">${esc(s.tableId)} · ${s.rowCount.toLocaleString()} rows</span>
+        <button class="btn btn-secondary minibtn" onclick="renameTarget('series',${enc(s.seriesId)},${enc(s.seriesName || s.seriesId)})" title="Rename series">✎</button>
+        <button class="btn btn-secondary minibtn" style="margin-left:auto"
+          onclick="deleteTarget('series',${enc(s.seriesId)},${s.rowCount})">Delete</button>
+      </div>`).join('')}
+    </div>`;
+  }).join('');
+
+  $('manageSaveBar').style.display = manageDirty() ? 'flex' : 'none';
+}
+
+function moveCat(ci, dir) {
+  const a = state.manageModel, j = ci + dir;
+  if (j < 0 || j >= a.length) return;
+  [a[ci], a[j]] = [a[j], a[ci]];
+  renderManageList();
+}
+function moveSeries(ci, si, dir) {
+  const s = state.manageModel[ci].series, j = si + dir;
+  if (j < 0 || j >= s.length) return;
+  [s[si], s[j]] = [s[j], s[si]];
+  renderManageList();
+}
+
+async function saveOrder() {
+  const seriesOrder = state.manageModel.flatMap(c => c.series.map(s => s.seriesId));
+  const btn = $('saveOrderBtn'); btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    const r = await fetch(`${PROXY_URL}/api/catalog/reorder`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', ...adminHeaders() },
+      body: JSON.stringify({ seriesOrder }),
+    });
+    const data = await r.json();
+    if (!r.ok || data.error) throw new Error(data.error || `HTTP ${r.status}`);
+    let msg = 'Order saved';
+    if (data.committed) msg += ' — committed to GitHub';
+    else if (data.committed === false) msg += ` — GitHub commit FAILED: ${data.commitError || ''}`;
+    toast(msg, 'success');
+    await loadCatalog();
+    renderManageList(true);
+  } catch (e) {
+    toast(`Save failed: ${e.message}`, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Save order';
+  }
+}
+
+async function renameTarget(type, id, current) {
+  if (manageDirty()) { toast('Save or discard your order changes first', 'error'); return; }
+  const next = prompt(`New name for this ${type}:`, current);
+  if (next == null) return;
+  const name = next.trim();
+  if (!name || name === current) return;
+  try {
+    const body = type === 'category' ? { type, oldName: id, newName: name } : { type, seriesId: id, newName: name };
+    const r = await fetch(`${PROXY_URL}/api/catalog/rename`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', ...adminHeaders() },
+      body: JSON.stringify(body),
+    });
+    const data = await r.json();
+    if (!r.ok || data.error) throw new Error(data.error || `HTTP ${r.status}`);
+    let msg = `Renamed (${data.updated.toLocaleString()} rows)`;
+    if (data.committed) msg += ' — committed to GitHub';
+    else if (data.committed === false) msg += ` — GitHub commit FAILED: ${data.commitError || ''}`;
+    toast(msg, 'success');
+    await loadCatalog();
+    renderManageList(true);
+  } catch (e) {
+    toast(`Rename failed: ${e.message}`, 'error');
+  }
+}
+
+async function deleteTarget(kind, value, rowCount) {
+  if (manageDirty()) { toast('Save or discard your order changes first', 'error'); return; }
+  const label = kind === 'category' ? `the whole category “${value}”` : `series “${value}”`;
+  if (!confirm(`Delete ${label}? This removes ${rowCount.toLocaleString()} rows from Vectors.xlsx.\n(A backup is written first.)`)) return;
+
+  try {
+    const r = await fetch(`${PROXY_URL}/api/catalog/delete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...adminHeaders() },
+      body: JSON.stringify(kind === 'category' ? { category: value } : { seriesId: value }),
+    });
+    const data = await r.json();
+    if (!r.ok || data.error) throw new Error(data.error || `HTTP ${r.status}`);
+    let msg = `Deleted ${data.deleted.toLocaleString()} rows`;
+    if (data.committed) msg += ' — committed to GitHub';
+    else if (data.committed === false) msg += ` — GitHub commit FAILED: ${data.commitError || ''}`;
+    toast(msg, 'success');
+    await loadCatalog();
+    renderManageList(true);
+  } catch (e) {
+    toast(`Delete failed: ${e.message}`, 'error');
+  }
+}
+
+// ── step navigation ──────────────────────────────────────
+function goStep(n) {
+  if (n === 3 && !buildCombos()) return;
+  for (let i = 1; i <= 4; i++) {
+    $(`step${i}`).classList.toggle('visible', i === n);
+    $(`pill${i}`).classList.toggle('active', i === n);
+    $(`pill${i}`).classList.toggle('done', i < n);
+  }
+  window.scrollTo(0, 0);
+}
+
+// ── step 1: table search ─────────────────────────────────
+let searchTimer = null;
+$('cubeSearch').addEventListener('input', () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(runSearch, 250);
+});
+
+async function ensureCubes() {
+  if (state.cubes) return;
+  $('searchStatus').innerHTML = '<span class="spinner"></span>Loading StatCan table list…';
+  const r = await fetch(`${PROXY_URL}/api/cubes-list`);
+  const data = await r.json();
+  if (data.error) throw new Error(data.error);
+  state.cubes = data.cubes;
+  $('searchStatus').textContent = `${state.cubes.length.toLocaleString()} tables available`;
+}
+
+async function runSearch() {
+  const q = $('cubeSearch').value.trim().toLowerCase();
+  if (q.length < 2) { $('searchResults').style.display = 'none'; return; }
+  try { await ensureCubes(); }
+  catch (e) { $('searchStatus').textContent = `Failed to load table list: ${e.message}`; return; }
+
+  const qDigits = q.replace(/\D/g, '');
+  const words = q.split(/\s+/).filter(w => w.length > 1);
+  let hits = state.cubes.filter(c => {
+    if (qDigits.length >= 4 && String(c.pid).startsWith(qDigits)) return true;
+    const t = c.title.toLowerCase();
+    return words.length > 0 && words.every(w => t.includes(w));
+  });
+  hits.sort((a, b) => (a.archived - b.archived) || a.title.length - b.title.length);
+  hits = hits.slice(0, 50);
+
+  $('searchStatus').textContent = hits.length ? `${hits.length === 50 ? 'Top 50' : hits.length} matches` : 'No matches';
+  $('searchResults').style.display = hits.length ? '' : 'none';
+  $('searchResults').innerHTML = hits.map(c => `
+    <div class="result-row" onclick="selectCube(${c.pid})">
+      <span class="result-pid">${formatTableId(c.pid)}</span>
+      <span class="result-title">${esc(c.title)}</span>
+      <span class="result-meta">${esc(c.freq)} · ${esc(c.start)} → ${esc(c.end)}</span>
+      ${c.archived ? '<span class="badge-archived">archived</span>' : ''}
+    </div>`).join('');
+}
+
+async function selectCube(pid) {
+  state.extend = null;
+  await loadTable(pid);
+}
+
+// ── load table metadata & render dimension panels ────────
+async function loadTable(pid) {
+  $('searchStatus').innerHTML = '<span class="spinner"></span>Loading table structure…';
+  let meta;
+  try {
+    const r = await fetch(`${PROXY_URL}/api/table-metadata?pid=${pid}`);
+    meta = await r.json();
+    if (meta.error) throw new Error(meta.error);
+  } catch (e) {
+    toast(`Could not load table metadata: ${e.message}`, 'error');
+    $('searchStatus').textContent = '';
+    return;
+  }
+  state.meta  = meta;
+  state.table = {
+    pid, title: meta.titleEn || String(pid),
+    freq: meta.frequency || '', start: meta.startDate || '', end: meta.endDate || '',
+  };
+
+  state.dims = (meta.dimensions || []).map(d => {
+    const members = (d.member || []).map(m => ({
+      id: m.memberId, parent: m.parentMemberId,
+      name: m.memberNameEn || String(m.memberId),
+      terminated: m.terminated || 0, depth: 0,
+    }));
+    const byId = {};
+    members.forEach(m => byId[m.id] = m);
+    members.forEach(m => {
+      let depth = 0, p = m.parent;
+      while (p != null && byId[p] && depth < 12) { depth++; p = byId[p].parent; }
+      m.depth = depth;
+    });
+    const children = {};
+    members.forEach(m => {
+      const key = (m.parent != null && byId[m.parent]) ? m.parent : '_root';
+      (children[key] = children[key] || []).push(m.id);
+    });
+    const order = [];
+    (function walk(ids) {
+      for (const id of ids || []) { order.push(id); walk(children[id]); }
+    })(children['_root']);
+    members.forEach(m => { if (!order.includes(m.id)) order.push(m.id); });
+    return { pos: d.dimensionPositionId, name: d.dimensionNameEn || `Dimension ${d.dimensionPositionId}`, members, byId, order };
+  });
+  state.dims.sort((a, b) => a.pos - b.pos);
+  state.selected   = state.dims.map(() => new Set());
+  state.lockedDims = state.dims.map(() => false);
+
+  if (state.extend) applyExtendPrechecks();
+  else {
+    // sensible default: first (total) member of every dimension pre-checked
+    state.dims.forEach((d, i) => {
+      const roots = d.members.filter(m => m.depth === 0);
+      if (roots.length === 1) state.selected[i].add(roots[0].id);
+    });
+  }
+
+  renderTableBanner();
+  renderDimPanels();
+  updateCounts();
+  $('searchStatus').textContent = '';
+  goStep(2);
+}
+
+function renderTableBanner() {
+  const t = state.table;
+  $('tableBanner').innerHTML = `
+    <span class="pid">${formatTableId(t.pid)}</span>
+    <span class="title">${esc(t.title)}</span>
+    <span class="meta">${esc(t.freq)} · ${esc((t.start || '').slice(0,7))} → ${esc((t.end || '').slice(0,7))}</span>
+    ${state.extend ? `<span class="meta" style="color:var(--admin)">extending “${esc(state.extend.seriesName || state.extend.seriesId)}”</span>` : ''}`;
+}
+
+function renderDimPanels() {
+  $('dimPanels').innerHTML = state.dims.map((d, i) => {
+    const maxDepth = Math.max(...d.members.map(m => m.depth), 0);
+    const chips = [`<span class="pchip" onclick="applyPreset(${i},'none')">None</span>`,
+                   `<span class="pchip" onclick="applyPreset(${i},'all')">All (${d.members.length})</span>`];
+    const locked = state.lockedDims[i];
+    return `
+    <div class="dim-panel" id="dimPanel${i}">
+      <div class="dim-head">
+        <span class="dim-title">Dimension ${d.pos} · ${esc(d.name)}</span>
+        <span class="dim-count" id="dimCount${i}"></span>
+      </div>
+      ${locked ? `<div class="dim-locked-note">Locked in the existing series — kept at its current value.</div>` : `
+      <div class="preset-chips">${chips.join('')}</div>
+      ${maxDepth > 0 ? `<div class="level-row">Select whole level:
+        ${Array.from({length: Math.min(maxDepth, 7) + 1}, (_, lv) => {
+          const n = d.members.filter(m => m.depth === lv).length;
+          return `<label class="lvl-box"><input type="checkbox" id="lv_${i}_${lv}" onchange="toggleLevel(${i},${lv},this.checked)">L${lv + 1} (${n})</label>`;
+        }).join('')}</div>` : ''}
+      <div class="member-search"><input type="text" placeholder="Filter members…" oninput="filterDim(${i}, this.value)"></div>`}
+      <div class="member-list" id="memberList${i}">
+        ${d.order.map(id => {
+          const m = d.byId[id];
+          const checked = state.selected[i].has(id) ? 'checked' : '';
+          const dis = locked ? 'disabled' : '';
+          return `<div class="member-item ${locked ? 'locked' : ''}" data-name="${esc(m.name.toLowerCase())}">
+            <input type="checkbox" id="mb_${i}_${id}" ${checked} ${dis} onchange="toggleMember(${i},${id},this.checked)" style="margin-left:${m.depth * 16}px">
+            <label for="mb_${i}_${id}">${esc(m.name)} ${m.depth > 0 ? `<span class="lvl">L${m.depth + 1}</span>` : ''} ${m.terminated ? '<span class="term-badge">terminated</span>' : ''}</label>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  }).join('');
+  state.dims.forEach((_, i) => syncLevelBoxes(i));
+}
+
+function applyPreset(i, what) {
+  const d = state.dims[i];
+  const sel = state.selected[i];
+  sel.clear();
+  if (what === 'all') d.members.forEach(m => sel.add(m.id));
+  else if (typeof what === 'number') d.members.forEach(m => { if (m.depth <= what) sel.add(m.id); });
+  for (const m of d.members) {
+    const cb = $(`mb_${i}_${m.id}`);
+    if (cb) cb.checked = sel.has(m.id);
+  }
+  syncLevelBoxes(i);
+  updateCounts();
+}
+
+function toggleLevel(i, lv, on) {
+  const d = state.dims[i];
+  const sel = state.selected[i];
+  for (const m of d.members) {
+    if (m.depth !== lv) continue;
+    if (on) sel.add(m.id); else sel.delete(m.id);
+    const cb = $(`mb_${i}_${m.id}`);
+    if (cb) cb.checked = on;
+  }
+  syncLevelBoxes(i);
+  updateCounts();
+}
+
+function toggleMember(i, id, on) {
+  if (on) state.selected[i].add(id); else state.selected[i].delete(id);
+  syncLevelBoxes(i);
+  updateCounts();
+}
+
+function syncLevelBoxes(i) {
+  const d = state.dims[i];
+  const sel = state.selected[i];
+  const byLevel = {};
+  for (const m of d.members) {
+    (byLevel[m.depth] = byLevel[m.depth] || { total: 0, on: 0 }).total++;
+    if (sel.has(m.id)) byLevel[m.depth].on++;
+  }
+  for (const [lv, c] of Object.entries(byLevel)) {
+    const box = $(`lv_${i}_${lv}`);
+    if (!box) continue;
+    box.checked = c.on === c.total;
+    box.indeterminate = c.on > 0 && c.on < c.total;
+  }
+}
+
+function filterDim(i, q) {
+  q = q.trim().toLowerCase();
+  document.querySelectorAll(`#memberList${i} .member-item`).forEach(el => {
+    el.style.display = !q || el.dataset.name.includes(q) ? '' : 'none';
+  });
+}
+
+const SOFT_WARN_ROWS = 3000;
+const HARD_CAP_ROWS  = 12000;
+
+function updateCounts() {
+  let total = 1, parts = [], drilldowns = 0, missing = [];
+  state.dims.forEach((d, i) => {
+    const n = state.selected[i].size;
+    $(`dimCount${i}`).textContent = `${n} of ${d.members.length} selected`;
+    if (n === 0) missing.push(d.name);
+    else { total *= n; if (n >= 2) { drilldowns++; parts.push(`${n} × ${d.name}`); } }
+  });
+  if (missing.length) total = 0;
+
+  $('comboCount').textContent = `${total.toLocaleString()} series rows`;
+  $('comboDetail').textContent = parts.length
+    ? `Drill-downs: ${parts.join(' · ')}`
+    : (total > 0 ? 'No drill-downs — a single flat series' : '');
+
+  let warnEl = $('comboWarn'), ok = total > 0;
+  if (missing.length) {
+    warnEl.innerHTML = `<span class="err">Select at least one member in: ${esc(missing.join(', '))}</span>`; ok = false;
+  } else if (drilldowns > 5) {
+    warnEl.innerHTML = `<span class="err">${drilldowns} drill-down dimensions — the app supports max 5. Lock ${drilldowns - 5} of them to a single member.</span>`; ok = false;
+  } else if (total > HARD_CAP_ROWS) {
+    warnEl.innerHTML = `<span class="err">${total.toLocaleString()} rows is over the ${HARD_CAP_ROWS.toLocaleString()} cap — trim your selection.</span>`; ok = false;
+  } else if (total > SOFT_WARN_ROWS) {
+    warnEl.innerHTML = `<span class="warn">Large selection — ${total.toLocaleString()} rows will work but slows loading.</span>`;
+  } else warnEl.innerHTML = '';
+
+  $('toStep3Btn').disabled = !ok;
+}
+
+// ── step 3: generate combos + preview ────────────────────
+function cartesian(arrays) {
+  let out = [[]];
+  for (const arr of arrays) {
+    const next = [];
+    for (const combo of out) for (const v of arr) next.push(combo.concat([v]));
+    out = next;
+  }
+  return out;
+}
+
+function buildCombos() {
+  const selMembers = state.dims.map((d, i) =>
+    d.order.filter(id => state.selected[i].has(id)).map(id => d.byId[id]));
+  if (selMembers.some(a => a.length === 0)) return false;
+
+  const drillIdx = [];   // metadata dim indexes that become dim1..dimN
+  state.dims.forEach((d, i) => { if (selMembers[i].length >= 2) drillIdx.push(i); });
+
+  let drillOrder = drillIdx;
+  if (state.extend) {
+    // preserve the existing series' dimension column order
+    drillOrder = state.extend.dimMap.map(m => m.metaIdx);
+  }
+
+  const combos = cartesian(selMembers).map(members => {
+    const coordinate = members.map(m => m.id).concat(Array(10 - members.length).fill(0)).join('.');
+    const dimValues = drillOrder.map(di => members[di].name);
+    const dimLevels = drillOrder.map(di => members[di].depth);
+    const names = members.filter((m, i) => selMembers[i].length >= 2 || state.dims.length === 1).map(m => m.name);
+    return { coordinate, dimValues, dimLevels, allNames: members.map(m => m.name), names };
+  });
+
+  state.combos = combos;
+  state.drillOrder = drillOrder;
+  state.drillNames = drillOrder.map(di => state.extend
+    ? state.extend.dimMap.find(m => m.metaIdx === di).name
+    : state.dims[di].name);
+
+  // defaults for the form
+  if (state.extend) {
+    $('fCategory').value   = state.extend.category;
+    $('fSeriesId').value   = state.extend.seriesId;
+    $('fSeriesName').value = state.extend.seriesName;
+    $('fFreq').value       = state.extend.freq || 'M';
+    ['fCategory','fSeriesId','fSeriesName','fFreq'].forEach(id => $(id).disabled = true);
+  } else {
+    ['fCategory','fSeriesId','fSeriesName','fFreq'].forEach(id => $(id).disabled = false);
+    if (!$('fSeriesName').value) {
+      const short = state.table.title.split(',')[0].trim();
+      $('fSeriesName').value = short;
+      $('fSeriesId').value   = slugify(short).slice(0, 40);
+    }
+    if (!$('fFreq').value) $('fFreq').value = 'M';
+    $('fFreq').value = freqLetter(state.table.freq);
+  }
+  renderPreview();
+  return true;
+}
+
+function rowLabels(combo) {
+  const full  = combo.names.length ? combo.names.join(' — ') : ($('fSeriesName').value || combo.allNames.join(' — '));
+  const short = combo.names.length ? combo.names[combo.names.length - 1] : ($('fSeriesName').value || '');
+  return { full, short };
+}
+
+function renderPreview() {
+  const dimCols = state.drillNames;
+  const head = `<tr>${dimCols.map(n => `<th>${esc(n)}</th>`).join('')}<th>Full label</th><th>Short label</th></tr>`;
+  const SHOW = 15;
+  const rows = state.combos.slice(0, SHOW).map(c => {
+    const l = rowLabels(c);
+    return `<tr>${c.dimValues.map(v => `<td>${esc(v)}</td>`).join('')}<td>${esc(l.full)}</td><td>${esc(l.short)}</td></tr>`;
+  }).join('');
+  $('previewTable').innerHTML = head + rows;
+  $('previewMore').textContent = state.combos.length > SHOW
+    ? `…and ${(state.combos.length - SHOW).toLocaleString()} more rows`
+    : '';
+  $('dimOrderNote').textContent = dimCols.length
+    ? `Drill-down order in the app: ${dimCols.join(' → ')}`
+    : 'This series has no drill-downs — it appears as a single selectable series.';
+  $('step3Detail').textContent = `${state.combos.length.toLocaleString()} rows will be checked against StatCan`;
+}
+
+// ── step 4: resolve & save ───────────────────────────────
+async function startResolve() {
+  let sid = slugify($('fSeriesId').value || '');
+  if (!$('fCategory').value.trim()) { toast('Enter a category', 'error'); return; }
+  if (!sid) { toast('Enter a series ID', 'error'); return; }
+  $('fSeriesId').value = sid;
+
+  // Guard: series IDs must be unique. Reusing one makes the new series collapse
+  // into / hide behind the existing series with that id (the CPI NSA gotcha).
+  // Extending an existing series deliberately reuses its id, so skip then.
+  if (!state.extend) {
+    const all = state.catalog?.series || [];
+    const clash = all.find(s => s.seriesId === sid);
+    if (clash) {
+      const taken = new Set(all.map(s => s.seriesId));
+      let alt = sid, n = 2;
+      while (taken.has(alt)) alt = `${sid}_${n++}`;
+      const ok = confirm(
+        `A series with ID “${sid}” already exists` +
+        (clash.category ? ` in “${clash.category}”` : '') +
+        ` (“${clash.seriesName || clash.seriesId}”).\n\n` +
+        `Series IDs must be unique, or the new series gets hidden under the existing one.\n\n` +
+        `OK = use “${alt}” instead.\nCancel = go back and edit the ID yourself.`);
+      if (!ok) return;            // stay on step 3 so the user can edit fSeriesId
+      sid = alt;
+      $('fSeriesId').value = alt;
+    }
+  }
+
+  goStep(4);
+  $('saveBtn').disabled = true;
+  $('saveResult').innerHTML = '';
+  $('resolveSummary').style.display = 'none';
+
+  const coords = state.combos.map(c => c.coordinate);
+  const CHUNK = 800;
+  const resolvedByCoord = {};
+  let done = 0;
+
+  $('resolveStatus').innerHTML = `<span class="spinner"></span>Resolving ${coords.length.toLocaleString()} coordinates against StatCan…`;
+  try {
+    for (let i = 0; i < coords.length; i += CHUNK) {
+      const chunk = coords.slice(i, i + CHUNK);
+      const r = await fetch(`${PROXY_URL}/api/resolve-vectors`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', ...adminHeaders() },
+        body: JSON.stringify({ productId: state.table.pid, coordinates: chunk }),
+      });
+      const data = await r.json();
+      if (data.error) throw new Error(data.error);
+      for (const res of data.results) resolvedByCoord[res.coordinate] = res;
+      done += chunk.length;
+      $('progressFill').style.width = `${Math.round(100 * done / coords.length)}%`;
+      $('resolveStatus').innerHTML = `<span class="spinner"></span>Resolved ${done.toLocaleString()} of ${coords.length.toLocaleString()}…`;
+    }
+  } catch (e) {
+    $('resolveStatus').innerHTML = `<span class="err">Resolution failed: ${esc(e.message)}</span>`;
+    return;
+  }
+
+  const existingVectors = new Set((state.extend?.rows || []).map(r => String(r.vector)));
+  const good = [], noData = [], dupes = [];
+  for (const c of state.combos) {
+    const res = resolvedByCoord[c.coordinate];
+    if (!res || !res.vectorId) { noData.push(c); continue; }
+    if (existingVectors.has(String(res.vectorId))) { dupes.push(c); continue; }
+    good.push({ ...c, vectorId: res.vectorId, statTitle: res.title });
+  }
+  state.resolved = good;
+
+  $('progressFill').style.width = '100%';
+  $('resolveStatus').textContent = '';
+  $('resolveSummary').style.display = '';
+  $('resolveSummary').innerHTML = `
+    <div class="stat ok"><div class="n">${good.length.toLocaleString()}</div><div class="l">new series rows</div></div>
+    <div class="stat miss"><div class="n">${noData.length.toLocaleString()}</div><div class="l">combinations with no data (skipped)</div></div>
+    ${dupes.length ? `<div class="stat skip"><div class="n">${dupes.length.toLocaleString()}</div><div class="l">already in catalog</div></div>` : ''}`;
+
+  $('step4Detail').textContent = good.length
+    ? `Ready to add ${good.length.toLocaleString()} rows to “${$('fCategory').value.trim()}”`
+    : 'Nothing new to add';
+  $('saveBtn').disabled = good.length === 0;
+}
+
+function buildCatalogRows() {
+  const cat   = $('fCategory').value.trim();
+  const sid   = $('fSeriesId').value.trim();
+  const sname = $('fSeriesName').value.trim();
+  const freq  = $('fFreq').value;
+  const tableId = state.extend?.tableId || formatTableId(state.table.pid);
+
+  return state.resolved.map(c => {
+    const l = rowLabels(c);
+    const row = {
+      category: cat, freq, series_id: sid, series_name: sname,
+      table_id: tableId, vector: String(c.vectorId),
+      full_label: l.full, short_label: l.short, dim1_group: '',
+    };
+    state.drillNames.forEach((dn, k) => {
+      row[`dim${k + 1}_name`]  = dn;
+      row[`dim${k + 1}_value`] = c.dimValues[k];
+      row[`dim${k + 1}_level`] = String(c.dimLevels[k]);
+    });
+    return row;
+  });
+}
+
+async function doSave() {
+  const rows = buildCatalogRows();
+  if (!rows.length) return;
+
+  $('saveBtn').disabled = true;
+  $('saveResult').innerHTML = '<span class="spinner"></span>Saving to catalog…';
+  try {
+    const r = await fetch(`${PROXY_URL}/api/catalog/append`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...adminHeaders() },
+      body: JSON.stringify({ rows }),
+    });
+    const data = await r.json();
+    if (!r.ok || data.error) throw new Error(data.error || `HTTP ${r.status}`);
+
+    let html = `<div class="hint" style="font-size:13px; color:var(--success); margin-bottom:6px">
+      ✓ Added ${data.added.toLocaleString()} rows${data.skipped ? ` (${data.skipped} duplicates skipped)` : ''}.</div>`;
+    if (data.backup) html += `<div class="hint">Backup saved: ${esc(data.backup)}</div>`;
+    if (data.committed) html += `<div class="hint">Committed to GitHub — the live site redeploys in ~2 minutes.</div>`;
+    else if (data.committed === false) html += `<div class="hint err">GitHub commit failed: ${esc(data.commitError || '')} — the local file was updated, but the change won't survive a server restart.</div>`;
+    else if (state.info.githubConfigured === false && state.info.adminRequired) html += `<div class="hint warn">No GitHub token configured — remember to commit Vectors.xlsx.</div>`;
+    html += `<div style="margin-top:10px">
+      <a href="/" class="btn btn-primary" style="text-decoration:none; display:inline-block">Open Explorer ↗</a>
+      <button class="btn btn-secondary" style="margin-left:8px" onclick="location.reload()">Add another series</button>
+    </div>`;
+    $('saveResult').innerHTML = html;
+    $('step4Detail').textContent = '';
+    toast(`Added ${data.added} rows to the catalog`, 'success');
+    loadCatalog();   // refresh extend/manage lists with the new rows
+  } catch (e) {
+    $('saveResult').innerHTML = `<span class="err">Save failed: ${esc(e.message)}</span>`;
+    $('saveBtn').disabled = false;
+  }
+}
+
+// ── extend mode ──────────────────────────────────────────
+async function onExtendPick(seriesId) {
+  if (!seriesId) return;
+  $('extendInfo').innerHTML = '<span class="spinner"></span>Loading series…';
+  try {
+    const r = await fetch(`${PROXY_URL}/api/catalog?series_id=${encodeURIComponent(seriesId)}`);
+    const s = await r.json();
+    if (s.error) throw new Error(s.error);
+    if (!s.tableId || s.tableId === 'FRED' || s.tableId === 'CIMT') {
+      throw new Error('This series does not come from a StatCan table and cannot be extended here.');
+    }
+    const pid = s.tableId.replace(/\D/g, '').slice(0, 8);
+
+    // Use one of the series' vectors to recover the full coordinate (locked dims)
+    let sampleCoord = null;
+    const sampleVec = s.rows[0]?.vector;
+    if (sampleVec) {
+      const mr = await fetch(`${PROXY_URL}/api/metadata?vectors=${sampleVec}`);
+      const md = await mr.json();
+      sampleCoord = md.metadata?.[0]?.coordinate || null;
+    }
+
+    state.extend = { ...s, pid, sampleCoord, dimMap: null };
+    await loadTable(parseInt(pid));
+  } catch (e) {
+    $('extendInfo').innerHTML = `<span class="err">${esc(e.message)}</span>`;
+    state.extend = null;
+  }
+}
+
+function applyExtendPrechecks() {
+  const ex = state.extend;
+  const dimNames = (ex.dimNames || []).filter(n => n);
+
+  // Align each existing dim column with a metadata dimension by name
+  const dimMap = [];
+  const unmatched = [];
+  dimNames.forEach((dn, colIdx) => {
+    const mi = state.dims.findIndex(d => d.name.trim().toLowerCase() === dn.trim().toLowerCase());
+    if (mi === -1) unmatched.push(dn);
+    else dimMap.push({ name: dn, colIdx, metaIdx: mi });
+  });
+  if (unmatched.length) {
+    toast(`Cannot auto-extend: dimension name(s) “${unmatched.join('”, “')}” don't match this table's dimensions (${state.dims.map(d => d.name).join(', ')}). This series was likely built with custom dimension names.`, 'error');
+    state.extend = null;
+    state.dims.forEach((d, i) => {
+      const roots = d.members.filter(m => m.depth === 0);
+      if (roots.length === 1) state.selected[i].add(roots[0].id);
+    });
+    return;
+  }
+  ex.dimMap = dimMap;
+
+  const drillMetaIdx = new Set(dimMap.map(m => m.metaIdx));
+  const coordParts = (ex.sampleCoord || '').split('.').map(x => parseInt(x));
+
+  state.dims.forEach((d, i) => {
+    if (drillMetaIdx.has(i)) {
+      // Pre-check members whose names appear in the existing rows
+      const col = dimMap.find(m => m.metaIdx === i).colIdx;
+      const existingVals = new Set(ex.rows.map(r => (r.dimValues[col] || '').trim().toLowerCase()));
+      d.members.forEach(m => {
+        if (existingVals.has(m.name.trim().toLowerCase())) state.selected[i].add(m.id);
+      });
+    } else {
+      // Locked dimension: keep the member recovered from the sample coordinate
+      state.lockedDims[i] = true;
+      const memberId = coordParts[i];
+      if (memberId && d.byId[memberId]) state.selected[i].add(memberId);
+      else {
+        const roots = d.members.filter(m => m.depth === 0);
+        if (roots.length === 1) state.selected[i].add(roots[0].id);
+      }
+    }
+  });
+  $('extendInfo').textContent = '';
+}
+
+init();
+</script>
+</body>
+</html>

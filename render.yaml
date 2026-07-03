@@ -1,0 +1,10 @@
+# Suggested Render config — NOT yet deployed. Review before creating the service.
+services:
+  - type: web
+    name: statcan-social-explorer
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python proxy.py
+    envVars:
+      - key: PORT
+        value: 10000

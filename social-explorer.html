@@ -1,0 +1,3464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>StatCan Social Explorer</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%230d9488'/><path d='M7 22 13 15 18 18 25 9' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>">
+<meta name="theme-color" content="#0d9488">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root {
+    /* Microsoft 365 / Fluent neutrals */
+    --bg: #faf9f8;        /* page canvas */
+    --surface: #ffffff;   /* header, sidebar, cards, chart */
+    --surface2: #f3f2f1;  /* input fills, secondary buttons, chips */
+    --border: #e1dfdd;    /* fluent neutral border */
+    --text: #242424;      /* fluent primary text */
+    --muted: #605e5c;     /* fluent secondary text */
+    /* Fluent blue — interactive accent (links, focus, selected states) */
+    --accent: #0f766e;
+    --accent2: #115e59;
+    --accent3: #c50f1f;   /* destructive (remove/clear) */
+    --success: #107c41;   /* office green (export) */
+    /* Globe & Mail identity */
+    --brand: #0d9488;     /* masthead rule, app mark, primary action */
+    --brand-dark: #0f766e;
+    --lab: #7c3aed;
+    /* Type */
+    --font-ui: 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
+    --font-serif: 'Pratt-Bold', Georgia, Palatino, 'Book Antiqua', 'Times New Roman', serif;
+    --font-mono: 'Cascadia Code', Consolas, ui-monospace, 'SFMono-Regular', monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--font-ui);
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    font-size: 13px;
+  }
+
+  header {
+    border-top: 3px solid var(--brand);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 28px 15px;
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    background: var(--surface);
+  }
+  .brand { display: flex; align-items: center; gap: 11px; }
+  .app-icon {
+    width: 30px;
+    height: 30px;
+    border-radius: 7px;
+    background: var(--brand);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .app-icon svg { display: block; }
+  header h1 {
+    font-family: var(--font-serif);
+    font-size: 21px;
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: -0.3px;
+  }
+  header span { color: var(--muted); font-size: 11px; letter-spacing: 0.5px; }
+  .lab-badge {
+    margin-left: 4px;
+    background: var(--lab);
+    color: #fff;
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    padding: 2px 6px;
+    border-radius: 3px;
+    vertical-align: middle;
+  }
+
+  .app {
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .sidebar {
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--surface);
+  }
+  .sidebar-scroll {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
+    padding: 20px;
+    padding-bottom: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+  }
+
+  .section-label {
+    font-family: var(--font-ui);
+    font-size: 11px;
+    font-weight: 400;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 8px;
+    padding-bottom: 7px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .selected-series { display: flex; flex-direction: column; gap: 5px; margin-top: 8px; }
+  .series-chip {
+    display: flex;
+    align-items: flex-start;
+    gap: 7px;
+    padding: 6px 9px;
+    border: 1px solid var(--border);
+    border-left: 3px solid transparent;
+    border-radius: 5px;
+    background: rgba(15,118,110,0.09);
+  }
+  .chip-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .chip-name {
+    font-size: 11px; line-height: 1.3; color: var(--text); flex: 1; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .health-badge {
+    display: inline-block; margin-bottom: 4px; padding: 1px 6px;
+    font-size: 9.5px; font-weight: 600; letter-spacing: 0.3px;
+    text-transform: uppercase; border-radius: 3px; cursor: default;
+  }
+  .health-terminated { color: #92400e; background: rgba(245,158,11,0.20); border: 1px solid rgba(245,158,11,0.5); }
+  .health-empty      { color: #991b1b; background: rgba(220,38,38,0.16);  border: 1px solid rgba(220,38,38,0.45); }
+  #series-tooltip {
+    position: fixed;
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 6px 10px;
+    font-size: 11px;
+    line-height: 1.5;
+    white-space: normal;
+    max-width: 260px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.13);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.12s;
+    z-index: 9999;
+  }
+  #series-tooltip.visible { opacity: 1; }
+  .chip-remove { cursor: pointer; color: var(--muted); font-size: 14px; line-height: 1;
+                 flex-shrink: 0; transition: color 0.15s; padding: 5px 7px; margin: -5px -4px -5px 0; border-radius: 3px; }
+  .chip-remove:hover { color: var(--accent3); }
+  .chip-transform {
+    font-size: 11px; height: 20px; padding: 0 4px;
+    border: 1px solid var(--border); border-radius: 3px;
+    background: var(--surface); color: var(--text);
+    font-family: var(--font-ui); cursor: pointer; flex-shrink: 0;
+  }
+  .apply-all-btn {
+    font-size: 10px; padding: 1px 6px; border-radius: 3px;
+    border: 1px solid var(--accent); color: var(--accent);
+    background: transparent; cursor: pointer; white-space: nowrap;
+    font-family: var(--font-ui); flex-shrink: 0;
+    transition: background 0.15s;
+  }
+  .apply-all-btn:hover { background: rgba(15,118,110,0.1); }
+
+  .cansim-link {
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 10px;
+    flex-shrink: 0;
+    padding: 1px 4px;
+    border-radius: 3px;
+    border: 1px solid transparent;
+    transition: all 0.15s;
+  }
+  .cansim-link:hover { color: var(--accent2); border-color: var(--accent2); }
+
+  .control-group { display: flex; flex-direction: column; gap: 6px; }
+  label { font-size: 12px; color: var(--muted); font-family: var(--font-ui); }
+
+  select, input[type="number"] {
+    width: 100%;
+    padding: 7px 9px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    color: var(--text);
+    font-family: var(--font-ui);
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.15s;
+    -webkit-appearance: none;
+  }
+  select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%236b7280' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    padding-right: 28px;
+    cursor: pointer;
+  }
+  select:focus, input:focus { border-color: var(--accent2); }
+  select option { background: var(--surface2); }
+
+  /* ── Global series search ── */
+  .search-box { position: relative; }
+  .search-box input[type="search"] {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px 28px 8px 30px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    color: var(--text);
+    font-family: var(--font-ui);
+    font-size: 13px;
+    outline: none;
+    -webkit-appearance: none;
+    transition: border-color 0.15s;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='%23605e5c' stroke-width='2.2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M21 21l-4.3-4.3'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: left 9px center;
+  }
+  .search-box input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; }
+  .search-box input[type="search"]:focus { border-color: var(--accent2); }
+  .search-clear {
+    position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+    cursor: pointer; color: var(--muted); font-size: 16px; line-height: 1;
+    display: none; user-select: none;
+  }
+  .search-clear:hover { color: var(--accent3); }
+  .search-results {
+    position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 60;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 6px;
+    box-shadow: 0 8px 28px rgba(0,0,0,0.20);
+    max-height: 380px; overflow-y: auto; display: none;
+  }
+  .search-results.visible { display: block; }
+  .search-meta {
+    padding: 6px 10px; font-size: 10px; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.5px;
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; background: var(--surface);
+  }
+  .search-result {
+    padding: 7px 10px; cursor: pointer; border-bottom: 1px solid var(--border);
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .search-result:last-child { border-bottom: none; }
+  .search-result:hover, .search-result.active { background: var(--surface2); }
+  .search-result.added { opacity: 0.55; }
+  .sr-label { font-size: 12px; color: var(--text); line-height: 1.35; }
+  .sr-cat { font-size: 9.5px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.4px; }
+  .sr-added { color: var(--success); font-size: 10px; margin-left: 4px; white-space: nowrap; }
+  .search-result mark { background: rgba(15,118,110,0.20); color: inherit; border-radius: 2px; padding: 0 1px; }
+  .search-empty { padding: 12px 10px; font-size: 12px; color: var(--muted); text-align: center; }
+
+  .date-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .date-inputs { display: flex; flex-direction: column; gap: 5px; }
+  .date-inputs select { width: 100%; }
+
+  .transform-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+  .chip {
+    padding: 5px 9px;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    cursor: pointer;
+    font-family: var(--font-ui);
+    font-size: 12px;
+    transition: all 0.15s;
+    color: var(--muted);
+  }
+  .chip:hover { border-color: var(--accent); color: var(--accent); }
+  .chip.active,
+  .chip[aria-checked="true"] { border-color: var(--accent); background: rgba(15,118,110,0.1); color: var(--accent); }
+
+  /* Breakdown steps */
+  .breakdown-step {
+    margin-top: 8px;
+    padding: 9px 10px;
+    background: rgba(15,118,110,0.05);
+    border: 1px dashed var(--accent);
+    border-radius: 5px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .breakdown-step-label {
+    font-size: 11px;
+    color: var(--accent);
+    font-weight: 500;
+    letter-spacing: 0.3px;
+  }
+  .dim-group { display: flex; flex-direction: column; gap: 4px; }
+  .dim-label { font-size: 11px; color: var(--muted); }
+
+  .btn {
+    padding: 9px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: var(--font-ui);
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.15s;
+    letter-spacing: 0.1px;
+  }
+  .btn-primary { background: var(--brand); color: #ffffff; flex: 1; }
+  .btn-primary:hover { background: var(--brand-dark); }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+  .btn-secondary:hover { border-color: var(--muted); background: var(--surface2); }
+  .btn-export { background: var(--success); color: #ffffff; display: flex; align-items: center; gap: 6px; }
+  .btn-export:hover { background: #0e6b38; }
+  .btn-export-img { background: var(--accent); color: #ffffff; display: flex; align-items: center; gap: 6px; }
+  .btn-export-img:hover { background: var(--accent2); }
+  .btn-row { display: flex; gap: 8px; }
+
+  .main { display: flex; flex-direction: column; background: var(--bg); min-width: 0; overflow: hidden; }
+
+  .toolbar {
+    border-bottom: 1px solid var(--border);
+    padding: 12px 22px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--surface);
+    flex-wrap: wrap;
+  }
+  .toolbar-left { flex: 1; min-width: 180px; display: flex; flex-direction: column; gap: 3px; }
+  .toolbar-title {
+    font-family: var(--font-serif);
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .toolbar-sources { font-size: 11px; color: var(--muted); }
+  .toolbar-sources a { color: var(--accent2); text-decoration: none; }
+  .toolbar-sources a:hover { text-decoration: underline; }
+
+  .chart-tabs { display: flex; gap: 4px; }
+  .tab {
+    padding: 5px 11px;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 11px;
+    color: var(--muted);
+    background: var(--surface2);
+    transition: all 0.15s;
+  }
+  .tab:hover { color: var(--text); border-color: var(--muted); }
+  .tab.active { border-color: var(--accent2); color: var(--accent2); background: rgba(15,118,110,0.08); }
+
+  .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--border); flex-shrink: 0; }
+  .status-dot.loaded { background: var(--success); }
+  .status-dot.loading { background: var(--accent); animation: pulse 1s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  .chart-area { flex: 1; padding: 14px 20px; display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+  .chart-container {
+    position: relative;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 18px;
+    flex: 1;
+    min-height: 240px;
+  }
+  .chart-empty {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 10px; color: var(--muted);
+  }
+  .chart-empty .icon { font-size: 36px; opacity: 0.25; }
+  .chart-empty p { font-size: 12px; }
+
+  .data-table-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    max-height: 210px;
+    overflow-y: auto;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  thead { position: sticky; top: 0; z-index: 1; background: var(--surface2); }
+  th {
+    padding: 7px 11px;
+    text-align: left;
+    color: var(--muted);
+    font-weight: 400;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    font-size: 11px;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  td { padding: 5px 11px; border-bottom: 1px solid rgba(0,0,0,0.07); color: var(--text); }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(0,0,0,0.02); }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td.pos { color: var(--success); }
+  td.neg { color: var(--accent3); }
+
+  .toast {
+    position: fixed; bottom: 22px; right: 22px;
+    padding: 11px 16px; border-radius: 6px;
+    font-size: 12px; z-index: 999;
+    animation: slideIn 0.18s ease; max-width: 300px;
+  }
+  .toast.error   { background: var(--accent3); color: #fff; }
+  .toast.success { background: var(--success);  color: #fff; }
+  .toast.info    { background: var(--accent2);  color: #fff; }
+  @keyframes slideIn { from{transform:translateY(8px);opacity:0} to{transform:translateY(0);opacity:1} }
+
+  .formula-preset {
+    padding: 3px 7px;
+    font-family: var(--font-ui);
+    font-size: 11px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--surface2);
+    color: var(--text);
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+    white-space: nowrap;
+  }
+  .formula-preset:hover { background: var(--surface2); border-color: var(--accent); color: var(--accent); }
+  .formula-active { background: rgba(15,118,110,0.10) !important; border-color: var(--accent) !important; color: var(--accent) !important; }
+  .formula-hint { font-size: 11px; color: var(--muted); margin-top: 4px; height: 14px; transition: opacity 0.15s; }
+
+  .spinner {
+    display: inline-block; width: 13px; height: 13px;
+    border: 2px solid var(--border); border-top-color: var(--accent);
+    border-radius: 50%; animation: spin 0.7s linear infinite;
+    vertical-align: middle; margin-right: 5px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── File drop zone ── */
+  .drop-zone {
+    border: 2px dashed var(--lab);
+    border-radius: 8px;
+    padding: 28px 18px;
+    text-align: center;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+    background: rgba(124,58,237,0.03);
+  }
+  .drop-zone:hover, .drop-zone.drag-over {
+    background: rgba(124,58,237,0.08);
+    border-color: var(--accent2);
+  }
+  .drop-zone input[type="file"] { display: none; }
+  .drop-zone .dz-icon { font-size: 26px; margin-bottom: 8px; opacity: 0.5; }
+  .drop-zone p { font-size: 12px; color: var(--muted); line-height: 1.5; }
+  .drop-zone strong { color: var(--lab); }
+  .loaded-file {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 10px;
+    background: rgba(22,163,74,0.08);
+    border: 1px solid rgba(22,163,74,0.3);
+    border-radius: 6px;
+    font-size: 11px; color: var(--success);
+  }
+  .loaded-file button {
+    margin-left: auto; background: none; border: none; cursor: pointer;
+    color: var(--muted); font-size: 13px; padding: 0 2px;
+  }
+  .loaded-file button:hover { color: var(--accent3); }
+
+  /* ── Saved Configurations ── */
+  .saved-config-item {
+    display: flex; align-items: flex-start; gap: 7px;
+    padding: 7px 9px; border: 1px solid var(--border); border-radius: 5px;
+    background: var(--surface2); transition: border-color 0.15s;
+  }
+  .saved-config-item:hover { border-color: var(--muted); }
+  .saved-config-name {
+    font-size: 12px; color: var(--text); overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap; line-height: 1.4;
+  }
+  .saved-config-meta { font-size: 10px; color: var(--muted); line-height: 1.4; }
+  .btn-cfg-load {
+    flex-shrink: 0; font-size: 11px; padding: 2px 7px; height: 22px;
+    border-radius: 4px; border: 1px solid var(--accent); color: var(--accent);
+    background: transparent; cursor: pointer; font-family: var(--font-ui);
+    transition: background 0.15s; white-space: nowrap; margin-top: 1px;
+  }
+  .btn-cfg-load:hover { background: rgba(15,118,110,0.1); }
+  .btn-cfg-delete {
+    flex-shrink: 0; background: none; border: none; cursor: pointer;
+    color: var(--muted); font-size: 15px; padding: 0 3px; border-radius: 3px;
+    transition: color 0.15s; line-height: 1; margin-top: 1px;
+  }
+  .btn-cfg-delete:hover { color: var(--accent3); }
+  .cfg-save-panel {
+    margin-top: 6px; padding: 9px 10px;
+    background: rgba(15,118,110,0.05); border: 1px dashed var(--accent);
+    border-radius: 5px; display: flex; flex-direction: column; gap: 7px;
+  }
+  .cfg-save-label { font-size: 11px; color: var(--accent); font-weight: 500; }
+  .btn-cfg-add {
+    width: 100%; margin-top: 5px; padding: 6px;
+    border: 1px solid var(--border); border-radius: 5px;
+    background: var(--surface2); color: var(--muted);
+    font-family: var(--font-ui); font-size: 12px;
+    cursor: pointer; transition: border-color 0.15s, color 0.15s;
+  }
+  .btn-cfg-add:hover { border-color: var(--accent); color: var(--accent); }
+
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+  /* ── Mobile: controls become a slide-in drawer (phones ≤640px) ── */
+  .nav-toggle { display: none; }
+  .drawer-backdrop { display: none; }
+
+  @media (max-width: 640px) {
+    header { padding: 12px 14px; gap: 10px; }
+    header h1 { font-size: 17px; }
+    header > span { display: none; }        /* hide subtitle to save room (direct child only) */
+    .catalog-btn { padding: 6px 10px; }
+    /* scoped under .catalog-btn so these out-specify the base rule,
+       which sits later in the source (the catalog block is appended at end of <style>) */
+    .catalog-btn .catalog-btn-full { display: none; }   /* shorten CTA on narrow headers */
+    .catalog-btn .catalog-btn-short { display: inline; }
+    .nav-toggle {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 36px; height: 36px; flex-shrink: 0;
+      border: 1px solid var(--border); border-radius: 7px;
+      background: var(--surface2); color: var(--text);
+      font-size: 17px; cursor: pointer; padding: 0;
+    }
+
+    /* Single column — the chart/main fills the screen */
+    .app { grid-template-columns: 1fr; }
+
+    /* Sidebar slides in from the left over the chart. Kept wide on mobile so the
+       native series <select> popup has room — long option labels wrap less. */
+    .sidebar {
+      position: fixed; top: 0; left: 0; bottom: 0;
+      width: 94vw; max-width: 460px; z-index: 100;
+      border-right: 1px solid var(--border);
+      transform: translateX(-100%);
+      transition: transform 0.25s ease;
+    }
+    /* Trim padding on mobile to give controls (esp. the series selector) more width. */
+    .sidebar-scroll { padding: 16px; padding-bottom: 8px; }
+    body.drawer-open .sidebar {
+      transform: translateX(0);
+      box-shadow: 0 12px 40px rgba(0,0,0,0.35);
+    }
+    .drawer-backdrop {
+      position: fixed; inset: 0; z-index: 90;
+      background: rgba(0,0,0,0.45); display: none;
+    }
+    body.drawer-open .drawer-backdrop { display: block; }
+
+    /* Roomier tap targets + breathing room in the chart area */
+    .toolbar { padding: 10px 14px; }
+    .toolbar-title { font-size: 15px; }
+    .chart-area { padding: 10px 12px; gap: 10px; }
+    .chart-container { padding: 10px; min-height: 300px; }
+    .data-table-wrap { overflow-x: auto; }
+  }
+
+  /* ── Catalog browser ── */
+  .catalog-btn {
+    margin-left: auto;
+    font-family: inherit; font-size: 12px; font-weight: 600;
+    color: var(--accent); background: var(--surface2);
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 6px 12px; cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .catalog-btn:hover { background: var(--bg); border-color: var(--accent); }
+  .catalog-btn-short { display: none; }
+  .catalog-overlay {
+    position: fixed; inset: 0; background: rgba(20,16,8,0.45);
+    display: none; z-index: 3000; align-items: center; justify-content: center; padding: 24px;
+  }
+  .catalog-overlay.open { display: flex; }
+  .catalog-modal {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    width: min(760px, 100%); max-height: min(82vh, 900px);
+    display: flex; flex-direction: column; overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+  }
+  .catalog-modal-head { padding: 16px 20px 12px; border-bottom: 1px solid var(--border); }
+  .catalog-modal-head .row1 { display: flex; align-items: baseline; gap: 10px; }
+  .catalog-modal-head h2 { font-family:var(--font-serif); font-size: 18px; color: var(--accent); margin: 0; }
+  .catalog-summary { font-size: 11px; color: var(--muted); }
+  .catalog-close {
+    margin-left: auto; background: none; border: none;
+    font-size: 24px; line-height: 1; color: var(--muted); cursor: pointer; padding: 0 4px;
+  }
+  .catalog-close:hover { color: var(--accent3); }
+  .catalog-search {
+    width: 100%; margin-top: 10px; padding: 8px 10px; font-size: 13px; font-family: inherit;
+    border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text);
+    box-sizing: border-box;
+  }
+  .catalog-body { overflow-y: auto; padding: 8px 12px 16px; }
+  .catalog-cat { margin-top: 14px; }
+  .catalog-cat:first-child { margin-top: 4px; }
+  .catalog-cat-head {
+    display: flex; align-items: baseline; gap: 8px; padding: 6px 8px; border-radius: 6px;
+    cursor: pointer; position: sticky; top: 0; background: var(--surface); z-index: 1;
+  }
+  .catalog-cat-head:hover { background: var(--surface2); }
+  .catalog-cat-head .name { font-weight: 700; font-size: 14px; color: var(--text); }
+  .catalog-cat-head .meta { font-size: 11px; color: var(--muted); }
+  .catalog-cat-head .jump { margin-left: auto; font-size: 11px; color: var(--accent); opacity: 0; }
+  .catalog-cat-head:hover .jump { opacity: 1; }
+  .catalog-series-row {
+    display: flex; align-items: baseline; gap: 8px;
+    padding: 4px 8px 4px 18px; font-size: 12.5px; border-bottom: 1px dashed var(--border);
+  }
+  .catalog-series-row .sname { color: var(--text); flex: 1; }
+  .catalog-series-row .vbadge {
+    font-size: 10px; color: var(--muted); background: var(--surface2);
+    border-radius: 10px; padding: 1px 7px; white-space: nowrap;
+  }
+  .catalog-series-row a.tbl { font-size: 11px; color: var(--accent); text-decoration: none; white-space: nowrap; }
+  .catalog-series-row a.tbl:hover { text-decoration: underline; }
+  .catalog-series-row .tbl-plain { font-size: 11px; color: var(--muted); white-space: nowrap; }
+  .catalog-empty { padding: 36px; text-align: center; color: var(--muted); font-size: 13px; }
+
+  /* Export-chart customization modal */
+  .cx-overlay {
+    position: fixed; inset: 0; background: rgba(20,16,8,0.45);
+    display: none; z-index: 3000; align-items: center; justify-content: center; padding: 24px;
+  }
+  .cx-overlay.open { display: flex; }
+  .cx-modal {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    width: min(520px, 100%); max-height: min(86vh, 760px);
+    display: flex; flex-direction: column; overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+  }
+  .cx-head { padding: 16px 20px 12px; border-bottom: 1px solid var(--border); display: flex; align-items: baseline; gap: 10px; }
+  .cx-head h2 { font-family: var(--font-serif); font-size: 18px; color: var(--accent); margin: 0; }
+  .cx-head .cx-close {
+    margin-left: auto; background: none; border: none;
+    font-size: 24px; line-height: 1; color: var(--muted); cursor: pointer; padding: 0 4px;
+  }
+  .cx-head .cx-close:hover { color: var(--brand); }
+  .cx-body { overflow-y: auto; padding: 16px 20px; }
+  .cx-field { margin-bottom: 16px; }
+  .cx-field > label { display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted); margin-bottom: 6px; }
+  .cx-input {
+    width: 100%; padding: 8px 10px; font-size: 13px; font-family: inherit; box-sizing: border-box;
+    border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text);
+  }
+  .cx-input:focus { outline: none; border-color: var(--accent); }
+  .cx-series-label { display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted); margin-bottom: 8px; }
+  .cx-series-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .cx-swatch { width: 14px; height: 14px; border-radius: 3px; flex: none; }
+  .cx-foot { padding: 12px 20px 16px; border-top: 1px solid var(--border); display: flex; gap: 8px; justify-content: flex-end; }
+</style>
+</head>
+<body>
+<div id="series-tooltip"></div>
+
+<header>
+  <button class="nav-toggle" onclick="toggleDrawer()" aria-label="Toggle controls">☰</button>
+  <div class="brand">
+    <span class="app-icon" aria-hidden="true">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 19h16"/>
+        <path d="M4 15l4-6 4 2 4-5 4 4"/>
+      </svg>
+    </span>
+    <h1>StatCan Social Explorer</h1>
+  </div>
+  <span>Statistics Canada · Data Workbench</span>
+  <button class="catalog-btn" onclick="openCatalog()" title="Browse the full catalog of categories and series">📖 <span class="catalog-btn-full">View Full Catalog</span><span class="catalog-btn-short">Catalog</span></button>
+</header>
+
+<div class="drawer-backdrop" onclick="toggleDrawer(false)" aria-hidden="true"></div>
+
+<div class="catalog-overlay" id="catalogOverlay" onclick="if(event.target===this)closeCatalog()">
+  <div class="catalog-modal" role="dialog" aria-label="Full catalog">
+    <div class="catalog-modal-head">
+      <div class="row1">
+        <h2>Full Catalog</h2>
+        <span class="catalog-summary" id="catalogSummary"></span>
+        <button class="catalog-close" onclick="closeCatalog()" aria-label="Close">×</button>
+      </div>
+      <input class="catalog-search" id="catalogSearch" type="text" autocomplete="off"
+             placeholder="Filter categories, series, or table IDs…"
+             oninput="renderCatalogBrowser(this.value)">
+    </div>
+    <div class="catalog-body" id="catalogBody"></div>
+  </div>
+</div>
+
+<div class="cx-overlay" id="chartExportOverlay" onclick="if(event.target===this)closeChartExport()">
+  <div class="cx-modal" role="dialog" aria-label="Export chart as image">
+    <div class="cx-head">
+      <h2>Export Chart</h2>
+      <button class="cx-close" onclick="closeChartExport()" aria-label="Close">×</button>
+    </div>
+    <div class="cx-body">
+      <div class="cx-field">
+        <label for="cxTitle">Chart title</label>
+        <input class="cx-input" id="cxTitle" type="text" autocomplete="off" placeholder="Chart title">
+      </div>
+      <div class="cx-field">
+        <span class="cx-series-label">Series names</span>
+        <div id="cxSeriesList"></div>
+      </div>
+      <div class="cx-field">
+        <label for="cxSource">Source (appears at bottom of image)</label>
+        <input class="cx-input" id="cxSource" type="text" autocomplete="off" placeholder="e.g. Source: Statistics Canada">
+      </div>
+    </div>
+    <div class="cx-foot">
+      <button class="btn btn-secondary" onclick="closeChartExport()">Cancel</button>
+      <button class="btn btn-export-img" onclick="downloadChartImage()">🖼 Download PNG</button>
+    </div>
+  </div>
+</div>
+
+<div class="app">
+
+  <aside class="sidebar">
+  <div class="sidebar-scroll">
+
+    <!-- ── Step 0: Loading state ── -->
+    <div>
+      <h3 class="section-label">Series Configuration</h3>
+      <div id="loadingState" style="font-size:12px;color:var(--muted);padding:8px 2px;">Loading series…</div>
+      <div id="loadErrorState" style="display:none;font-size:12px;color:#dc2626;padding:8px 2px;line-height:1.5"></div>
+    </div>
+
+    <!-- ── Global series search ── -->
+    <div id="searchSection" style="display:none">
+      <h3 class="section-label">Search all series</h3>
+      <div class="search-box">
+        <input type="search" id="seriesSearch" placeholder="Type to search…"
+               autocomplete="off" spellcheck="false"
+               oninput="onSearchInput(this.value)" onkeydown="onSearchKey(event)"
+               onfocus="onSearchInput(this.value)">
+        <span class="search-clear" id="searchClear" onclick="clearSeriesSearch()">×</span>
+        <div class="search-results" id="searchResults"></div>
+      </div>
+    </div>
+
+    <!-- ── Saved Configurations ── -->
+    <!-- ── Category ── -->
+    <div id="categorySection" style="display:none">
+      <h3 class="section-label">Category</h3>
+      <div class="control-group">
+        <select id="categorySelect" onchange="selectCategory(this.value)">
+          <option value="">— load a spreadsheet first —</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- ── Series ── -->
+    <div id="seriesSection" style="display:none">
+      <h3 class="section-label">
+        Series
+        <span id="seriesCount" style="color:var(--muted);font-size:11px;text-transform:none;letter-spacing:0;margin-left:4px;">0 / 5</span>
+      </h3>
+      <div class="control-group">
+        <select id="seriesDropdown" onchange="addSeries(this.value)">
+          <option value="">— select to add —</option>
+        </select>
+      </div>
+
+      <!-- Breakdown area: up to 2 cascading dimension dropdowns -->
+      <div class="breakdown-step" id="breakdownGroup" style="display:none">
+        <div class="breakdown-step-label" id="breakdownStepLabel">↳ Step 2: Select breakdown</div>
+
+        <div class="dim-group" id="dim1Group" style="display:none">
+          <div class="dim-label" id="dim1Label">Dimension 1</div>
+          <select id="dim1Dropdown" onchange="onDim1Change(this.value)">
+            <option value="">— select —</option>
+          </select>
+        </div>
+
+        <div class="dim-group" id="dim2Group" style="display:none">
+          <div class="dim-label" id="dim2Label">Dimension 2</div>
+          <select id="dim2Dropdown" onchange="onDim2Change(this.value)">
+            <option value="">— select —</option>
+          </select>
+        </div>
+
+        <div class="dim-group" id="dim3Group" style="display:none">
+          <div class="dim-label" id="dim3Label">Dimension 3</div>
+          <select id="dim3Dropdown" onchange="onDim3Change(this.value)">
+            <option value="">— select —</option>
+          </select>
+        </div>
+
+        <div class="dim-group" id="dim4Group" style="display:none">
+          <div class="dim-label" id="dim4Label">Dimension 4</div>
+          <select id="dim4Dropdown" onchange="onDim4Change(this.value)">
+            <option value="">— select —</option>
+          </select>
+        </div>
+
+        <div class="dim-group" id="dim5Group" style="display:none">
+          <div class="dim-label" id="dim5Label">Dimension 5</div>
+          <select id="dim5Dropdown" onchange="onDim5Change(this.value)">
+            <option value="">— select —</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="selected-series" id="selectedSeries"></div>
+    </div>
+
+    <!-- ── Date Range ── -->
+    <div id="dateSection" style="display:none">
+      <h3 class="section-label">Date Range</h3>
+      <div class="date-row">
+        <div class="control-group">
+          <label>From</label>
+          <div class="date-inputs">
+            <select id="fromMonth">
+              <option value="1">Jan</option><option value="2">Feb</option>
+              <option value="3">Mar</option><option value="4">Apr</option>
+              <option value="5">May</option><option value="6">Jun</option>
+              <option value="7">Jul</option><option value="8">Aug</option>
+              <option value="9">Sep</option><option value="10">Oct</option>
+              <option value="11">Nov</option><option value="12">Dec</option>
+            </select>
+            <select id="fromYear"></select>
+          </div>
+        </div>
+        <div class="control-group">
+          <label>To</label>
+          <div class="date-inputs">
+            <select id="toMonth">
+              <option value="1">Jan</option><option value="2">Feb</option>
+              <option value="3">Mar</option><option value="4">Apr</option>
+              <option value="5">May</option><option value="6">Jun</option>
+              <option value="7">Jul</option><option value="8">Aug</option>
+              <option value="9">Sep</option><option value="10">Oct</option>
+              <option value="11">Nov</option><option value="12" selected>Dec</option>
+            </select>
+            <select id="toYear"></select>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Output ── -->
+    <div id="outputSection" style="display:none">
+      <h3 class="section-label">Output</h3>
+      <div class="control-group">
+        <select id="freqSelect" onchange="onFreqChange(this.value)">
+          <option value="original">Original (as reported)</option>
+          <option value="monthly_sum">Convert to monthly (sum)</option>
+          <option value="quarterly_sum">Convert to quarterly (sum)</option>
+          <option value="quarterly_avg">Convert to quarterly (average)</option>
+          <option value="annual_sum">Convert to annual (sum)</option>
+          <option value="annual_avg">Convert to annual (average)</option>
+          <option value="roll12_sum">12-month rolling sum</option>
+          <option value="roll12_avg">12-month rolling average</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- ── Transform (now per-series, inside each chip) ── -->
+    <div id="transformSection" style="display:none"></div>
+
+    <!-- ── Formula ── -->
+    <div id="formulaSection" style="display:none">
+      <h3 class="section-label">
+        Formula
+        <span style="color:var(--muted);font-size:11px;text-transform:none;letter-spacing:0;margin-left:4px;">optional</span>
+      </h3>
+      <div id="formulaLetterKey" style="font-size:11px;color:var(--muted);margin-bottom:4px;line-height:1.6;display:none"></div>
+      <div id="formulaRows"></div>
+      <div style="display:flex;gap:4px;align-items:center;margin-top:2px">
+        <button onclick="addFormula()" title="Add another formula line"
+                style="flex-shrink:0;padding:0 8px;height:26px;border:1px dashed var(--border);background:var(--surface2);border-radius:4px;cursor:pointer;font-size:11px;color:var(--muted);font-family:var(--font-ui)">+ Add line</button>
+        <button onclick="applyFormulas()" title="Apply formulas"
+                style="flex-shrink:0;padding:0 12px;height:26px;border:1px solid var(--accent);background:var(--accent);border-radius:4px;cursor:pointer;font-size:11px;color:#fff;font-family:var(--font-ui);font-weight:600">Apply</button>
+        <button onclick="clearFormulas()" title="Clear all formulas"
+                style="flex-shrink:0;padding:0 7px;height:26px;border:1px solid var(--border);background:var(--surface2);border-radius:4px;cursor:pointer;font-size:12px;color:var(--muted)">✕</button>
+      </div>
+      <p class="formula-hint" id="formulaHint"></p>
+      <p id="formulaTransformWarn" style="display:none;font-size:11px;color:#b45309;background:#fffbeb;border:1px solid #fcd34d;border-radius:4px;padding:4px 8px;margin-top:4px;line-height:1.4"></p>
+      <div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:5px">
+        <button class="formula-preset" data-expr="A/B"                  onclick="setFormula('A/B')">A÷B</button>
+        <button class="formula-preset" data-expr="100*(A/B)"             onclick="setFormula('100*(A/B)')">100×(A/B)</button>
+        <button class="formula-preset" data-expr="A-B"                   onclick="setFormula('A-B')">A−B</button>
+        <button class="formula-preset" data-expr="100*(A-B)/B"           onclick="setFormula('100*(A-B)/B')">% diff</button>
+        <button class="formula-preset" data-expr="A+B"                   onclick="setFormula('A+B')">A+B</button>
+        <button class="formula-preset" data-expr="A*B"                   onclick="setFormula('A*B')">A×B</button>
+        <button class="formula-preset" data-expr="100*(A+B+C+D)/E"       onclick="setFormula('100*(A+B+C+D)/E')">100×(A+B+C+D)÷E</button>
+        <button class="formula-preset" data-expr="SUM(A,B,C,D)/E"        onclick="setFormula('SUM(A,B,C,D)/E')">SUM÷E</button>
+        <button class="formula-preset" data-expr="AVG(A,B,C)"            onclick="setFormula('AVG(A,B,C)')">AVG(A,B,C)</button>
+      </div>
+      <p style="font-size:10px;color:var(--muted);margin-top:5px;line-height:1.6">
+        Mix any letters · <strong>SUM(A,B,…)</strong> · <strong>AVG(A,B,…)</strong> · <strong>ABS</strong> · <strong>SQRT</strong> · <strong>LOG</strong> · <strong>MIN(A,B)</strong> · <strong>MAX(A,B)</strong> · <strong>A^2</strong> for power
+      </p>
+    </div>
+
+  </div><!-- /.sidebar-scroll -->
+
+    <!-- ── Buttons (pinned) ── -->
+    <div id="btnSection" style="display:none;padding:12px 20px 20px;border-top:1px solid var(--border);flex-shrink:0;">
+      <div id="cfgSavePanel" class="cfg-save-panel" style="display:none;margin-bottom:10px;">
+        <div class="cfg-save-label">↳ Name this configuration</div>
+        <input type="text" id="cfgSaveName" placeholder="e.g. Services share of exports"
+               style="font-size:12px"
+               onkeydown="if(event.key==='Enter')confirmSaveConfig();if(event.key==='Escape')cancelSaveConfig()">
+        <div style="display:flex;gap:5px">
+          <button onclick="confirmSaveConfig()"
+                  style="flex:1;padding:5px;border:none;border-radius:4px;background:var(--accent);color:#fff;font-family:var(--font-ui);font-size:12px;font-weight:500;cursor:pointer">Save</button>
+          <button onclick="cancelSaveConfig()"
+                  style="padding:5px 10px;border:1px solid var(--border);border-radius:4px;background:var(--surface2);color:var(--muted);font-family:var(--font-ui);font-size:12px;cursor:pointer">Cancel</button>
+        </div>
+      </div>
+      <div id="cfgBookmarkMsg" style="display:none;margin-bottom:10px;"></div>
+      <div class="btn-row">
+        <button class="btn btn-secondary" onclick="clearChart()" title="Clear chart and selections">✕ Clear</button>
+        <button class="btn btn-secondary" id="btnCfgAdd" onclick="startSaveConfig()" title="Save current configuration as a bookmark">💾 Save</button>
+        <button class="btn btn-primary" id="fetchBtn" onclick="fetchData()">
+          <span id="fetchBtnText">↓ Fetch Data</span>
+        </button>
+      </div>
+    </div>
+
+  </aside>
+
+  <main class="main">
+    <div class="toolbar">
+      <div class="toolbar-left">
+        <div class="toolbar-title" id="chartTitle">Load a series configuration to begin</div>
+        <div class="toolbar-sources" id="toolbarSources" style="display:none;"></div>
+      </div>
+      <div class="chart-tabs">
+        <div class="tab active" data-chart="line"    onclick="switchChart('line')">Line</div>
+        <div class="tab"        data-chart="bar"     onclick="switchChart('bar')">Bar</div>
+        <div class="tab"        data-chart="stacked" onclick="switchChart('stacked')">Stacked</div>
+        <div class="tab"        data-chart="area"    onclick="switchChart('area')">Area</div>
+      </div>
+      <div class="status-dot" id="statusDot"></div>
+      <button class="btn btn-export-img" id="exportChartBtn" onclick="openChartExport()" style="display:none;">
+        🖼 Export Chart
+      </button>
+      <button class="btn btn-export" id="exportBtn" onclick="exportXlsx()" style="display:none;">
+        ↓ Export XLSX
+      </button>
+    </div>
+
+    <div class="chart-area">
+      <div class="chart-container">
+        <div class="chart-empty" id="chartEmpty">
+          <div class="icon">📊</div>
+          <p>Load a series configuration to begin</p>
+        </div>
+        <canvas id="myChart" style="display:none;"></canvas>
+      </div>
+      <div class="data-table-wrap" id="tableWrap" style="display:none;">
+        <table>
+          <thead id="tableHead"></thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════════════════════════
+const PROXY_URL = window.location.protocol === "file:" ? "http://localhost:5004" : "";
+// Default social-topic buckets — always shown in the category picker, even
+// before any series have been added via the Wizard, so the taxonomy is ready.
+const DEFAULT_CATEGORIES = ['Health', 'Education', 'Indigenous Statistics',
+  'Justice & Safety', 'Demographics & Population', 'Social Assistance & Income Support'];
+
+// ═══════════════════════════════════════════════════════════
+// DATA — populated dynamically from uploaded Excel
+// ═══════════════════════════════════════════════════════════
+let CATEGORIES = {};
+let SERIES_MAP = {};
+
+// ═══════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════
+const state = {
+  category: '',
+  activeSeries: [],
+  fromYear: 2024, fromMonth: 1,
+  toYear: new Date().getFullYear(), toMonth: 12,
+  frequency: 'original',
+  seriesTransforms: {},   // sid → transform key; defaults to 'level'
+  chartType: 'line',
+  rawData: {},
+  processedData: {},
+  seriesUnits: {},
+  vectorHealth: {},       // vectorId → { status, terminated, empty, lastRefPer }
+  formulas: [{ expr: '', label: '' }],  // one row per formula line; label = optional override
+  formulaResults: [],                   // computed: [{ expr, label, points:[{label,value}] }]
+  activeFormulaIdx: 0,                   // row that preset buttons target
+  autoUpdateTo: true,
+  // Pending breakdown selection
+  pendingSeriesId: null,
+  pendingDim1: null,
+  pendingDim2: null,
+  pendingDim3: null,
+  pendingDim4: null,
+};
+let chartInst = null;
+
+// ═══════════════════════════════════════════════════════════
+// FRED — hardcoded U.S. series
+// ═══════════════════════════════════════════════════════════
+// U.S. (FRED) catalog — fetched from /api/fred-catalog at load, then flattened
+// by buildSeriesMap() exactly like the StatCan catalog. Four 🇺🇸 categories:
+// GDP & yields are flat (dims:0); Employment & Prices open FRED release tables
+// as dim1 sub-series, with the FRED hierarchy preserved via per-row `level`
+// (dimOptionsHtml indents the dropdown by level, like StatCan commodity trees).
+// The `.vectors` value holds a FRED series id; the fetch path already routes
+// tableId:'FRED' ids to /api/fred, so no engine changes are needed.
+let FRED_CATALOG = null;
+
+// Fetch (and cache) the FRED catalog. Safe to call repeatedly — returns the
+// cached copy when present, retries the fetch when a previous attempt failed,
+// so a transient error at page load doesn't permanently lose the 🇺🇸 categories
+// (e.g. when a later XLSX upload rebuilds CATEGORIES from scratch).
+async function loadFredCatalog() {
+  if (FRED_CATALOG) return FRED_CATALOG;
+  try {
+    const r = await fetch('/api/fred-catalog');
+    if (r.ok) FRED_CATALOG = await r.json();
+  } catch (_) { /* U.S. categories simply won't appear this round */ }
+  return FRED_CATALOG;
+}
+
+function buildFredCategories() {
+  if (!FRED_CATALOG || !Array.isArray(FRED_CATALOG.categories)) return;
+  for (const cat of FRED_CATALOG.categories) {
+    const series = cat.series.map(s => {
+      if (!s.dims) {
+        return {
+          id: s.id, name: s.name, tableId: 'FRED', dims: 0, freq: s.freq,
+          vectors: { '': s.fredId },
+          labels:  { '': { full: s.name, short: s.chipShort || s.name } },
+        };
+      }
+      if (s.dims === 2) {
+        // dims:2 — e.g. GDP expenditure mirroring StatCan's Prices → Estimates.
+        // Row hierarchy indents the dim2 (Estimates) dropdown.
+        const vectors = {}, labels = {}, lv2 = {};
+        for (const row of s.rows) {
+          const key = `${row.dim1}__${row.value}`;
+          vectors[key] = row.fredId;
+          labels[key]  = { full: row.full || row.value, short: row.short || row.value };
+          lv2[row.value] = row.level;
+        }
+        return {
+          id: s.id, name: s.name, tableId: 'FRED', dims: 2, freq: s.freq,
+          dim1Name: s.dim1Name || 'Prices', dim2Name: s.dim2Name || 'Estimates',
+          vectors, labels, dimLevels: { 2: lv2 },
+        };
+      }
+      // dims:1 — a FRED release table opened as dim1 sub-series
+      const vectors = {}, labels = {}, levels = {};
+      for (const row of s.rows) {
+        vectors[row.value] = row.fredId;
+        labels[row.value]  = { full: row.full || row.value, short: row.short || row.value };
+        levels[row.value]  = row.level;
+      }
+      return {
+        id: s.id, name: s.name, tableId: 'FRED', dims: 1, freq: s.freq,
+        dim1Name: s.dim1Name || 'Series',
+        vectors, labels, dimLevels: { 1: levels },
+      };
+    });
+    CATEGORIES[cat.id] = { id: cat.id, label: cat.label, sourceFreq: cat.sourceFreq, series };
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════════════
+function cansimUrl(tableId) {
+  return `https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid=${tableId.replace(/-/g, '')}`;
+}
+
+function slugify(str) {
+  return str.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+}
+
+// Build <option> tags for a breakdown dropdown, indenting sub-categories
+// according to the optional dim*_level columns (em-space per level).
+function dimOptionsHtml(series, dimIdx, values) {
+  const lvls = series.dimLevels?.[dimIdx] || {};
+  const known = values.map(v => lvls[v]).filter(x => x != null);
+  const base = known.length ? Math.min(...known) : 0;
+  return values.map(v => {
+    const lv = lvls[v] != null ? Math.max(0, lvls[v] - base) : 0;
+    return `<option value="${v}">${' '.repeat(lv)}${v}</option>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════════
+// EXCEL PARSER
+// ═══════════════════════════════════════════════════════════
+function parseExcel(workbook) {
+  const sheetName = workbook.SheetNames.find(n => n.toLowerCase() === 'series') || workbook.SheetNames[0];
+  const ws = workbook.Sheets[sheetName];
+  return parseRows(XLSX.utils.sheet_to_json(ws, { raw: false, defval: '' }));
+}
+
+// Build the category map from an array of plain row objects (keyed by column
+// name). Shared by the XLSX-upload path and the fast JSON catalog path — the
+// latter skips in-browser XLSX decoding, which dominates load time on big catalogs.
+function parseRows(rows) {
+  const catMap = {};
+
+  for (const row of rows) {
+    const catName  = (row['category']   || '').trim();
+    const freqRaw  = (row['freq']       || 'M').trim().toUpperCase();
+    const seriesId = (row['series_id']  || '').trim();
+    const serName  = (row['series_name']|| '').trim();
+    const tableId  = (row['table_id']   || '').trim();
+    const dim1Name = (row['dim1_name']  || '').trim();
+    const dim1Val  = (row['dim1_value'] || '').trim();
+    const dim2Name = (row['dim2_name']  || '').trim();
+    const dim2Val  = (row['dim2_value'] || '').trim();
+    const dim3Name = (row['dim3_name']  || '').trim();
+    const dim3Val  = (row['dim3_value'] || '').trim();
+    const dim4Name = (row['dim4_name']  || '').trim();
+    const dim4Val  = (row['dim4_value'] || '').trim();
+    const dim5Name = (row['dim5_name']  || '').trim();
+    const dim5Val  = (row['dim5_value'] || '').trim();
+    const vectorId = String(row['vector'] || '').trim().replace(/^[vV]/, '');
+    const fullLbl  = (row['full_label'] || serName).trim();
+    const shortLbl = (row['short_label']|| fullLbl).trim();
+
+    if (!catName || !seriesId || !vectorId) continue;
+
+    const catId = slugify(catName);
+    const freq  = freqRaw === 'Q' ? 'quarterly' : freqRaw === 'D' ? 'daily' : 'monthly';
+
+    if (!catMap[catId]) {
+      catMap[catId] = { id: catId, label: catName, sourceFreq: freq, series: [] };
+    }
+
+    let series = catMap[catId].series.find(s => s.id === seriesId);
+    if (!series) {
+      const numDims = dim1Val ? (dim2Val ? (dim3Val ? (dim4Val ? (dim5Val ? 5 : 4) : 3) : 2) : 1) : 0;
+      series = {
+        id: seriesId,
+        name: serName,
+        tableId,
+        freq,
+        dims: numDims,
+        dim1Name: dim1Name || null,
+        dim2Name: dim2Name || null,
+        dim3Name: dim3Name || null,
+        dim4Name: dim4Name || null,
+        dim5Name: dim5Name || null,
+        vectors: {},     // key → vectorId
+        labels: {},      // key → { full, short }
+        dim1Groups: {},  // dim1Val → optgroup label (for grouped dropdowns)
+      };
+      catMap[catId].series.push(series);
+    }
+
+    // Build lookup key
+    const key = series.dims === 5 ? `${dim1Val}__${dim2Val}__${dim3Val}__${dim4Val}__${dim5Val}`
+              : series.dims === 4 ? `${dim1Val}__${dim2Val}__${dim3Val}__${dim4Val}`
+              : series.dims === 3 ? `${dim1Val}__${dim2Val}__${dim3Val}`
+              : series.dims === 2 ? `${dim1Val}__${dim2Val}`
+              : series.dims === 1 ? dim1Val
+              : seriesId;
+
+    series.vectors[key] = vectorId;
+    series.labels[key]  = { full: fullLbl, short: shortLbl };
+    const dim1Group = (row['dim1_group'] || '').trim();
+    if (dim1Group && dim1Val) series.dim1Groups[dim1Val] = dim1Group;
+
+    // Optional hierarchy depth per dim value (dim1_level..dim5_level columns)
+    const dimVals = [dim1Val, dim2Val, dim3Val, dim4Val, dim5Val];
+    for (let k = 1; k <= 5; k++) {
+      const lv = parseInt((row[`dim${k}_level`] || '').toString().trim(), 10);
+      if (!isNaN(lv) && dimVals[k - 1]) {
+        series.dimLevels = series.dimLevels || {};
+        (series.dimLevels[k] = series.dimLevels[k] || {})[dimVals[k - 1]] = lv;
+      }
+    }
+  }
+
+  return catMap;
+}
+
+function buildSeriesMap() {
+  buildFredCategories();   // append 🇺🇸 categories (if the FRED catalog loaded)
+  SERIES_MAP = {};
+  for (const [, cat] of Object.entries(CATEGORIES)) {
+    for (const s of cat.series) {
+      if (s.dims === 0) {
+        // No breakdown: add as direct series using vectorId from first key
+        const key = Object.keys(s.vectors)[0];
+        const vectorId = s.vectors[key];
+        const info = s.labels[key] || {};
+        SERIES_MAP[s.id] = {
+          id:         s.id,
+          name:       info.full || s.name,
+          chipLabel:  info.short || s.name,
+          category:   cat.label,
+          vectorId,
+          tableId:    s.tableId,
+          sourceFreq: s.freq || cat.sourceFreq,
+        };
+      } else {
+        // Has breakdowns: register compound IDs when breakdowns are selected
+        for (const [key, vectorId] of Object.entries(s.vectors)) {
+          const compoundId = `${s.id}__${key}`;
+          const info = s.labels[key] || {};
+          let chipLabel;
+          if (s.dims === 1) {
+            chipLabel = `${s.name} › ${info.short || key}`;
+          } else if (s.dims === 5) {
+            const [d1, d2, d3, d4, d5] = key.split('__');
+            let commPart;
+            if (d3 === d4 && d4 === d5) {
+              commPart = info.short || d3;                            // L2 total
+            } else if (d4 === d5) {
+              commPart = `${d3} › ${info.short || d4}`;              // L3 total / no drill-down
+            } else {
+              commPart = `${d3} › ${d4} › ${info.short || d5}`;     // L4 item
+            }
+            chipLabel = `${s.name} › ${d1} (${d2.slice(0,3)}) › ${commPart}`;
+          } else if (s.dims === 4) {
+            const [d1, d2, d3, d4] = key.split('__');
+            const commPart = d3 === d4 ? (info.short || d3) : `${d3} › ${info.short || d4}`;
+            chipLabel = `${s.name} › ${d1} (${d2.slice(0,3)}) › ${commPart}`;
+          } else if (s.dims === 3) {
+            const [d1, d2, d3] = key.split('__');
+            chipLabel = `${s.name} › ${d1} › ${d2} › ${info.short || d3}`;
+          } else {
+            const [d1, d2] = key.split('__');
+            chipLabel = `${s.name} › ${d1} › ${info.short || d2}`;
+          }
+          SERIES_MAP[compoundId] = {
+            id:         compoundId,
+            name:       info.full || `${s.name} — ${key}`,
+            chipLabel,
+            category:   cat.label,
+            vectorId,
+            tableId:    s.tableId,
+            sourceFreq: s.freq || cat.sourceFreq,
+          };
+        }
+      }
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// FILE DROP / UPLOAD
+// ═══════════════════════════════════════════════════════════
+function onDragOver(e) {
+  e.preventDefault();
+  document.getElementById('dropZone').classList.add('drag-over');
+}
+function onDragLeave(e) {
+  document.getElementById('dropZone').classList.remove('drag-over');
+}
+function onDrop(e) {
+  e.preventDefault();
+  document.getElementById('dropZone').classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file) loadFile(file);
+}
+function onFileSelected(input) {
+  if (input.files[0]) loadFile(input.files[0]);
+}
+
+function loadFile(file) {
+  if (!file.name.endsWith('.xlsx')) {
+    toast('Please upload an .xlsx file', 'error');
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = async e => {
+    try {
+      const wb = XLSX.read(e.target.result, { type: 'array' });
+      CATEGORIES = parseExcel(wb);
+      await loadFredCatalog();   // retry if the page-load fetch failed
+      buildSeriesMap();
+      const count = Object.values(CATEGORIES).reduce((n, c) => n + c.series.length, 0);
+      if (count === 0) { toast('No series found — check spreadsheet format', 'error'); return; }
+      activateUI(file.name, count);
+      toast(`Loaded ${count} series from ${file.name} ✓`, 'success');
+    } catch (err) {
+      toast(`Failed to parse file: ${err.message}`, 'error');
+      console.error(err);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function activateUI(filename, count) {
+  // Hide loading state, show series count
+  document.getElementById('loadingState').style.display = 'none';
+  document.getElementById('loadErrorState').style.display = 'none';
+
+  // Populate category dropdown
+  const sel = document.getElementById('categorySelect');
+  sel.innerHTML = Object.values(CATEGORIES)
+    .map(c => `<option value="${c.id}">${c.label}</option>`)
+    .join('');
+
+  // Build the global-search index now that SERIES_MAP is fully populated
+  buildSearchIndex();
+
+  // Show all sidebar sections
+  ['searchSection','categorySection','seriesSection','dateSection','outputSection',
+   'transformSection','formulaSection','btnSection'].forEach(id => {
+    document.getElementById(id).style.display = '';
+  });
+  renderFormulaRows();
+
+  // Init first category
+  state.category = Object.keys(CATEGORIES)[0];
+  document.getElementById('categorySelect').value = state.category;
+  updateFreqDropdown();
+  renderSeriesList();
+  updateEmptyState();
+  document.getElementById('chartTitle').textContent = 'Select a series to begin';
+
+  // Auto-restore config if the page was opened via a bookmarked URL
+  tryLoadFromUrl();
+}
+
+function resetFile() {
+  CATEGORIES = {};
+  SERIES_MAP = {};
+  state.category = '';
+  clearChart();
+  document.getElementById('dropZoneWrap').style.display = '';
+  document.getElementById('loadedFileInfo').style.display = 'none';
+  ['searchSection','categorySection','seriesSection','dateSection','outputSection',
+   'transformSection','formulaSection','btnSection'].forEach(id => {
+    document.getElementById(id).style.display = 'none';
+  });
+  SEARCH_INDEX = [];
+  if (document.getElementById('seriesSearch')) clearSeriesSearch();
+  document.getElementById('chartTitle').textContent = 'Load a series configuration to begin';
+  document.getElementById('fileInput').value = '';
+}
+
+// ═══════════════════════════════════════════════════════════
+// UI
+// ═══════════════════════════════════════════════════════════
+function updateFreqDropdown() {
+  const cat = CATEGORIES[state.category];
+  if (!cat) return;
+  // Base on active series only; treat 'daily' as 'monthly' (proxy aggregates to monthly sums)
+  const activeFreqs = state.activeSeries
+    .map(sid => SERIES_MAP[sid]?.sourceFreq).filter(Boolean)
+    .map(f => f === 'daily' ? 'monthly' : f);
+  const srcFreq = activeFreqs.includes('quarterly') ? 'quarterly' : 'monthly';
+  const freqSel = document.getElementById('freqSelect');
+  freqSel.querySelectorAll('option').forEach(opt => {
+    opt.hidden = (opt.value === 'monthly_sum' && srcFreq === 'monthly') ||
+                 (opt.value === 'monthly_sum' && srcFreq === 'quarterly') ||
+                 (opt.value === 'quarterly_sum' && srcFreq === 'quarterly') ||
+                 (opt.value === 'quarterly_avg' && srcFreq === 'quarterly');
+  });
+  if (freqSel.options[freqSel.selectedIndex]?.hidden) freqSel.value = 'original';
+}
+
+function selectCategory(cat) {
+  if (!CATEGORIES[cat]) return;
+  state.category = cat;
+  document.getElementById('breakdownGroup').style.display = 'none';
+  updateFreqDropdown();
+
+  renderSeriesList();
+  updateEmptyState();
+}
+
+function renderSeriesList() {
+  const cat = CATEGORIES[state.category];
+  if (!cat) return;
+  const dropdown = document.getElementById('seriesDropdown');
+  const chipsEl  = document.getElementById('selectedSeries');
+  const countEl  = document.getElementById('seriesCount');
+  const maxSeries = 5;
+
+  countEl.textContent = `${state.activeSeries.length} / ${maxSeries}`;
+
+  // Build list of already-selected top-level series IDs
+  const selectedTopLevel = new Set(state.activeSeries.map(sid => sid.split('__')[0]));
+
+  dropdown.disabled = state.activeSeries.length >= maxSeries;
+  dropdown.innerHTML = `<option value="">${dropdown.disabled ? '— max reached —' : '— select to add —'}</option>`
+    + cat.series
+        .filter(s => s.dims === 0 ? !selectedTopLevel.has(s.id) : true)
+        .map(s => {
+          const hasDims = s.dims > 0;
+          return `<option value="${s.id}">${s.name}${hasDims ? ' ▾' : ''}</option>`;
+        }).join('');
+
+  renderChips(chipsEl);
+}
+
+function renderChips(chipsEl) {
+  const LETTERS = ['A', 'B', 'C', 'D', 'E'];
+  const T_OPTS = [
+    ['level','Level'], ['pop','PoP %'], ['pop_abs','PoP Δ'],
+    ['yoy','YoY %'], ['yoy_abs','YoY Δ'], ['index','Index'],
+  ];
+  chipsEl.innerHTML = state.activeSeries.map((sid, i) => {
+    const s = SERIES_MAP[sid];
+    if (!s) return '';
+    const color  = PALETTE[i % PALETTE.length];
+    const uom    = state.seriesUnits?.[sid]?.uom || '';
+    const uomTag = uom ? `<span style="font-size:11px;color:var(--muted);flex-shrink:0;white-space:nowrap;">${uom}</span>` : '';
+    const label  = s.chipLabel || s.name;
+    const letter = LETTERS[i];
+    const curT   = state.seriesTransforms[sid] || 'level';
+    const tOpts  = T_OPTS.map(([v,l]) => `<option value="${v}"${curT===v?' selected':''}>${l}</option>`).join('');
+    const linkHref  = s.tableId === 'FRED'  ? `https://fred.stlouisfed.org/series/${s.vectorId}`
+                    : cansimUrl(s.tableId);
+    const linkTitle = s.tableId === 'FRED'  ? `View ${s.vectorId} on FRED`
+                    : `View table ${s.tableId} on StatCan`;
+    return `<div class="series-chip" style="border-left-color:${color};">
+      <div class="chip-dot" style="background:${color};margin-top:3px;"></div>
+      <span style="font-size:11px;font-weight:500;color:${color};flex-shrink:0;min-width:10px;padding-top:2px;">${letter}</span>
+      <div style="flex:1;min-width:0;overflow:hidden;">
+        <div class="chip-name" data-full="${label}">${label}</div>
+        <div style="font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.3;margin-bottom:3px;">${s.category || ''}</div>
+        ${healthBadgeHtml(sid)}
+        <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;">
+          <select class="chip-transform" onclick="event.stopPropagation()"
+                  onchange="setSeriesTransform('${sid}', this.value)">${tOpts}</select>
+          <button class="apply-all-btn" data-sid="${sid}"
+                  onclick="event.stopPropagation();applyTransformToAll('${sid}')"
+                  style="display:none">Apply to all</button>
+          ${uomTag}
+        </div>
+      </div>
+      <a href="${linkHref}" target="_blank" class="cansim-link"
+         onclick="event.stopPropagation()" title="${linkTitle}"
+         style="margin-top:1px;">↗</a>
+      <span class="chip-remove" onclick="removeSeries('${sid}')" title="Remove">×</span>
+    </div>`;
+  }).join('');
+
+  // Formula letter key
+  const keyEl = document.getElementById('formulaLetterKey');
+  if (state.activeSeries.length >= 2) {
+    keyEl.style.display = '';
+    keyEl.innerHTML = state.activeSeries.map((sid, i) => {
+      const s = SERIES_MAP[sid];
+      const label = s ? (s.chipLabel || s.name) : sid;
+      return `<span style="color:${PALETTE[i % PALETTE.length]};font-weight:500;">${LETTERS[i]}</span> = ${label}`;
+    }).join('&emsp;');
+  } else {
+    keyEl.style.display = 'none';
+  }
+}
+
+function addSeries(id) {
+  if (!id) return;
+  const cat    = CATEGORIES[state.category];
+  const series = cat?.series.find(s => s.id === id);
+  if (!series) return;
+
+  const bdGroup = document.getElementById('breakdownGroup');
+
+  if (series.dims === 0) {
+    // No breakdown — add directly
+    doAddSeries(id);
+    return;
+  }
+
+  // Has dimensions — show breakdown panel
+  state.pendingSeriesId = id;
+  state.pendingDim1 = null;
+
+  document.getElementById('breakdownStepLabel').textContent = `↳ Step 2: Select ${series.dim1Name}`;
+
+  // Populate dim1 dropdown with unique dim1 values — preserve Excel row order
+  const _seen1 = new Set();
+  const dim1Values = Object.keys(series.vectors)
+    .map(k => series.dims >= 2 ? k.split('__')[0] : k)
+    .filter(v => _seen1.has(v) ? false : _seen1.add(v));
+
+  const dim1Sel = document.getElementById('dim1Dropdown');
+  const hasGroups = series.dim1Groups && Object.keys(series.dim1Groups).length > 0;
+  if (hasGroups) {
+    const seenGrps = [], groupedItems = {};
+    for (const v of dim1Values) {
+      const grp = series.dim1Groups[v] || '';
+      if (!groupedItems[grp]) { seenGrps.push(grp); groupedItems[grp] = []; }
+      groupedItems[grp].push(v);
+    }
+    let html = `<option value="">— select ${series.dim1Name || 'option'} —</option>`;
+    for (const grp of seenGrps) {
+      if (grp) html += `<optgroup label="${grp}">`;
+      html += dimOptionsHtml(series, 1, groupedItems[grp]);
+      if (grp) html += `</optgroup>`;
+    }
+    dim1Sel.innerHTML = html;
+  } else {
+    dim1Sel.innerHTML = `<option value="">— select ${series.dim1Name || 'option'} —</option>`
+      + dimOptionsHtml(series, 1, dim1Values);
+  }
+  dim1Sel.value = '';
+
+  document.getElementById('dim1Label').textContent = series.dim1Name || 'Dimension 1';
+  document.getElementById('dim1Group').style.display = '';
+  document.getElementById('dim2Group').style.display = 'none';
+  bdGroup.style.display = '';
+
+  document.getElementById('seriesDropdown').value = '';
+  setTimeout(() => bdGroup.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50);
+}
+
+function onDim1Change(val) {
+  if (!val) return;
+  const cat    = CATEGORIES[state.category];
+  const series = cat?.series.find(s => s.id === state.pendingSeriesId);
+  if (!series) return;
+
+  state.pendingDim1 = val;
+
+  if (series.dims === 1) {
+    // Single-dim: add immediately
+    const compoundId = `${series.id}__${val}`;
+    doAddSeries(compoundId);
+    hideDimPanel();
+  } else {
+    // Two-dim or three-dim: populate dim2
+    const _seen2 = new Set();
+    const availDim2 = Object.keys(series.vectors)
+      .filter(k => k.startsWith(val + '__'))
+      .map(k => k.slice(val.length + 2).split('__')[0])
+      .filter(v => _seen2.has(v) ? false : _seen2.add(v));
+
+    // If only one dim2 option, auto-skip it (dims=2: add directly; dims>2: move to dim3/dim4)
+    if (availDim2.length === 1) {
+      if (series.dims === 2) {
+        doAddSeries(`${state.pendingSeriesId}__${val}__${availDim2[0]}`);
+        hideDimPanel();
+        return;
+      }
+      // dims=3 or 4: simulate selecting dim2 automatically
+      onDim2Change(availDim2[0]);
+      return;
+    }
+
+    const dim2Sel = document.getElementById('dim2Dropdown');
+    dim2Sel.innerHTML = `<option value="">— select ${series.dim2Name || 'option'} —</option>`
+      + dimOptionsHtml(series, 2, availDim2);
+    dim2Sel.value = '';
+
+    document.getElementById('dim2Label').textContent = series.dim2Name || 'Dimension 2';
+    document.getElementById('dim2Group').style.display = '';
+    document.getElementById('dim3Group').style.display = 'none';
+    const nextDimName = series.dims === 3 ? series.dim3Name : null;
+    document.getElementById('breakdownStepLabel').textContent = nextDimName
+      ? `↳ Step 2: ${series.dim1Name} → ${series.dim2Name} → ${series.dim3Name}`
+      : `↳ Step 2: ${series.dim1Name} → ${series.dim2Name}`;
+  }
+}
+
+function onDim2Change(val) {
+  if (!val || !state.pendingDim1) return;
+  const cat    = CATEGORIES[state.category];
+  const series = cat?.series.find(s => s.id === state.pendingSeriesId);
+  if (!series) return;
+
+  if (series.dims === 2) {
+    doAddSeries(`${state.pendingSeriesId}__${state.pendingDim1}__${val}`);
+    hideDimPanel();
+    return;
+  }
+
+  // dims >= 3: find available dim3 options
+  state.pendingDim2 = val;
+  const prefix3 = `${state.pendingDim1}__${val}__`;
+  const _seen3 = new Set();
+  const availDim3 = Object.keys(series.vectors)
+    .filter(k => k.startsWith(prefix3))
+    .map(k => k.slice(prefix3.length).split('__')[0])
+    .filter(v => _seen3.has(v) ? false : _seen3.add(v));
+
+  if (availDim3.length === 1) {
+    if (series.dims === 3) {
+      doAddSeries(`${state.pendingSeriesId}__${state.pendingDim1}__${val}__${availDim3[0]}`);
+      hideDimPanel();
+      return;
+    }
+    // dims === 4: single dim3 — skip straight to dim4 check
+    state.pendingDim3 = availDim3[0];
+    _showDim4OrAdd(series);
+    return;
+  }
+
+  const dim3Sel = document.getElementById('dim3Dropdown');
+  dim3Sel.innerHTML = `<option value="">— select ${series.dim3Name || 'option'} —</option>`
+    + dimOptionsHtml(series, 3, availDim3);
+  dim3Sel.value = '';
+  document.getElementById('dim3Label').textContent = series.dim3Name || 'Dimension 3';
+  document.getElementById('dim3Group').style.display = '';
+  document.getElementById('dim4Group').style.display = 'none';
+}
+
+function onDim3Change(val) {
+  if (!val || !state.pendingDim1 || !state.pendingDim2) return;
+  const cat    = CATEGORIES[state.category];
+  const series = cat?.series.find(s => s.id === state.pendingSeriesId);
+  if (!series) return;
+
+  if (series.dims === 3) {
+    doAddSeries(`${state.pendingSeriesId}__${state.pendingDim1}__${state.pendingDim2}__${val}`);
+    hideDimPanel();
+    return;
+  }
+  // dims === 4: proceed to dim4
+  state.pendingDim3 = val;
+  _showDim4OrAdd(series);
+}
+
+function _showDim4OrAdd(series) {
+  const prefix4 = `${state.pendingDim1}__${state.pendingDim2}__${state.pendingDim3}__`;
+  const _seen4 = new Set();
+  const availDim4 = Object.keys(series.vectors)
+    .filter(k => k.startsWith(prefix4))
+    .map(k => k.slice(prefix4.length).split('__')[0])
+    .filter(v => _seen4.has(v) ? false : _seen4.add(v));
+
+  if (availDim4.length === 1) {
+    if (series.dims === 4) {
+      doAddSeries(`${state.pendingSeriesId}__${state.pendingDim1}__${state.pendingDim2}__${state.pendingDim3}__${availDim4[0]}`);
+      hideDimPanel();
+    } else {
+      // dims === 5: auto-select dim4 and proceed to dim5
+      state.pendingDim4 = availDim4[0];
+      _showDim5OrAdd(series);
+    }
+    return;
+  }
+  const dim4Sel = document.getElementById('dim4Dropdown');
+  dim4Sel.innerHTML = `<option value="">— select ${series.dim4Name || 'option'} —</option>`
+    + dimOptionsHtml(series, 4, availDim4);
+  dim4Sel.value = '';
+  document.getElementById('dim4Label').textContent = series.dim4Name || 'Dimension 4';
+  document.getElementById('dim4Group').style.display = '';
+  document.getElementById('dim5Group').style.display = 'none';
+}
+
+function onDim4Change(val) {
+  if (!val || !state.pendingDim1 || !state.pendingDim2 || !state.pendingDim3) return;
+  const cat    = CATEGORIES[state.category];
+  const series = cat?.series.find(s => s.id === state.pendingSeriesId);
+  if (!series) return;
+
+  if (series.dims === 4) {
+    doAddSeries(`${state.pendingSeriesId}__${state.pendingDim1}__${state.pendingDim2}__${state.pendingDim3}__${val}`);
+    hideDimPanel();
+  } else {
+    // dims === 5: proceed to dim5
+    state.pendingDim4 = val;
+    _showDim5OrAdd(series);
+  }
+}
+
+function _showDim5OrAdd(series) {
+  const prefix5 = `${state.pendingDim1}__${state.pendingDim2}__${state.pendingDim3}__${state.pendingDim4}__`;
+  const _seen5 = new Set();
+  const availDim5 = Object.keys(series.vectors)
+    .filter(k => k.startsWith(prefix5))
+    .map(k => k.slice(prefix5.length))
+    .filter(v => _seen5.has(v) ? false : _seen5.add(v));
+
+  if (availDim5.length === 1) {
+    doAddSeries(`${state.pendingSeriesId}__${state.pendingDim1}__${state.pendingDim2}__${state.pendingDim3}__${state.pendingDim4}__${availDim5[0]}`);
+    hideDimPanel();
+    return;
+  }
+  const dim5Sel = document.getElementById('dim5Dropdown');
+  dim5Sel.innerHTML = `<option value="">— select ${series.dim5Name || 'option'} —</option>`
+    + dimOptionsHtml(series, 5, availDim5);
+  dim5Sel.value = '';
+  document.getElementById('dim5Label').textContent = series.dim5Name || 'Dimension 5';
+  document.getElementById('dim5Group').style.display = '';
+}
+
+function onDim5Change(val) {
+  if (!val || !state.pendingDim1 || !state.pendingDim2 || !state.pendingDim3 || !state.pendingDim4) return;
+  doAddSeries(`${state.pendingSeriesId}__${state.pendingDim1}__${state.pendingDim2}__${state.pendingDim3}__${state.pendingDim4}__${val}`);
+  hideDimPanel();
+}
+
+function hideDimPanel() {
+  document.getElementById('breakdownGroup').style.display = 'none';
+  document.getElementById('dim1Group').style.display = 'none';
+  document.getElementById('dim2Group').style.display = 'none';
+  document.getElementById('dim3Group').style.display = 'none';
+  document.getElementById('dim4Group').style.display = 'none';
+  document.getElementById('dim5Group').style.display = 'none';
+  state.pendingSeriesId = null;
+  state.pendingDim1 = null;
+  state.pendingDim2 = null;
+  state.pendingDim3 = null;
+  state.pendingDim4 = null;
+}
+
+function doAddSeries(id) {
+  const maxSeries = 5;
+  if (state.activeSeries.length >= maxSeries) { toast(`Max ${maxSeries} series at once`, 'error'); return; }
+  if (!SERIES_MAP[id]) { toast(`Series not found: ${id}`, 'error'); return; }
+  if (!state.activeSeries.includes(id)) {
+    state.activeSeries.push(id);
+    state.autoUpdateTo = true;
+    checkVectorHealth(id);   // async — flags terminated/empty StatCan vectors
+  }
+  document.getElementById('seriesDropdown').value = '';
+  renderSeriesList();
+  updateEmptyState();
+}
+
+// ═══════════════════════════════════════════════════════════
+// VECTOR HEALTH CHECK — flag terminated / empty StatCan vectors inline
+// ═══════════════════════════════════════════════════════════
+// Only StatCan WDS vectors are checked; FRED / BOC use other data
+// sources with their own liveness, so they're skipped. Results are cached by
+// vectorId so re-adding the same series doesn't re-query StatCan.
+async function checkVectorHealth(id) {
+  const s = SERIES_MAP[id];
+  if (!s || !s.vectorId) return;
+  if (['FRED', 'BOC'].includes(s.tableId)) return;
+  const vid = String(s.vectorId).replace(/^[vV]/, '');
+  if (!vid || state.vectorHealth[vid]) return;   // cached or in flight
+
+  state.vectorHealth[vid] = { status: 'checking' };
+  try {
+    const resp = await fetch(`${PROXY_URL}/api/vector-health?vectors=${encodeURIComponent(vid)}`);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const json = await resp.json();
+    const h = (json.health || []).find(x => String(x.vectorId) === vid) || {};
+    state.vectorHealth[vid] = {
+      status: h.terminated ? 'terminated' : h.empty ? 'empty' : 'ok',
+      lastRefPer: h.lastRefPer || null,
+    };
+  } catch (e) {
+    state.vectorHealth[vid] = { status: 'unknown' };   // never false-flag on error
+  }
+  // Re-render chips so the badge appears once the result lands
+  renderSeriesList();
+}
+
+// Returns the badge HTML for a series chip, or '' when healthy/unknown.
+function healthBadgeHtml(sid) {
+  const s = SERIES_MAP[sid];
+  if (!s || !s.vectorId) return '';
+  const vid = String(s.vectorId).replace(/^[vV]/, '');
+  const h = state.vectorHealth[vid];
+  if (!h || h.status === 'ok' || h.status === 'unknown' || h.status === 'checking') return '';
+  const tip = h.status === 'terminated'
+    ? `Discontinued series${h.lastRefPer ? ` — last data ${h.lastRefPer}` : ''}`
+    : 'No data available for this vector';
+  return `<span class="health-badge health-${h.status}" title="${tip}">⚠ ${h.status === 'terminated' ? 'discontinued' : 'no data'}</span>`;
+}
+
+// ═══════════════════════════════════════════════════════════
+// ACRONYM / SYNONYM RECOGNITION  (shared by both search boxes)
+// ═══════════════════════════════════════════════════════════
+// Type an acronym (or a common synonym) and it also matches the expanded
+// phrase — e.g. "cpi" finds "Consumer Price Index". One-directional and
+// predictable: typing a KEY also matches its expansions; typing any of the
+// expansions still works as an ordinary literal substring. Keys are lowercase.
+// To teach the search a new acronym, just add a line here.
+const SEARCH_SYNONYMS = {
+  // price indexes
+  cpi:   ['consumer price index', 'inflation'],
+  ppi:   ['producer price index', 'industrial product price'],
+  ippi:  ['industrial product price index'],
+  rmpi:  ['raw materials price index'],
+  fppi:  ['farm product price index'],
+  nhpi:  ['new housing price index'],
+  // national accounts
+  gdp:   ['gross domestic product'],
+  gfcf:  ['gross fixed capital formation'],
+  fdi:   ['foreign direct investment'],
+  // labour
+  lfs:   ['labour force survey'],
+  seph:  ['survey of employment, payrolls and hours'],
+  ei:    ['employment insurance'],
+  // classifications / geography / adjustment
+  naics: ['north american industry classification'],
+  cma:   ['census metropolitan area'],
+  sa:    ['seasonally adjusted'],
+  nsa:   ['not seasonally adjusted'],
+  // sources / trade
+  boc:   ['bank of canada'],
+  bcpi:  ['commodity price index'],
+  cimt:  ['international merchandise trade', 'merchandise trade'],
+  // plain-language synonyms (kept small to avoid surprises)
+  inflation:    ['consumer price index'],
+  jobs:         ['employment'],
+  unemployment: ['unemployment rate'],
+};
+
+// The terms to test/highlight for one typed token: the token itself plus any
+// synonym expansions.
+function searchTermsFor(token) {
+  const syns = SEARCH_SYNONYMS[token];
+  return syns ? [token, ...syns] : [token];
+}
+
+// True if a typed token matches the haystack literally OR via a synonym.
+function tokenMatchesHay(token, hay) {
+  return searchTermsFor(token).some(term => hay.includes(term));
+}
+
+// ═══════════════════════════════════════════════════════════
+// GLOBAL SERIES SEARCH
+// ═══════════════════════════════════════════════════════════
+let SEARCH_INDEX = [];     // [{ id, label, category, hay }]
+let searchMatches = [];    // current result objects
+let searchActiveIdx = -1;  // keyboard-highlighted row
+
+function buildSearchIndex() {
+  SEARCH_INDEX = Object.values(SERIES_MAP).map(s => {
+    const label = s.chipLabel || s.name || s.id;
+    const category = s.category || '';
+    return {
+      id: s.id,
+      label,
+      category,
+      hay: `${label} ${s.name || ''} ${category}`.toLowerCase(),
+    };
+  });
+}
+
+function runSeriesSearch(query) {
+  const tokens = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if (!tokens.length) return [];
+  const out = [];
+  for (const item of SEARCH_INDEX) {
+    if (tokens.every(t => tokenMatchesHay(t, item.hay))) {
+      out.push(item);
+      if (out.length >= 300) break;   // cap scan; we only render 50
+    }
+  }
+  return out;
+}
+
+function escapeHtml(str) {
+  return str.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+}
+
+function highlightTokens(text, tokens) {
+  let safe = escapeHtml(text);
+  // Highlight each typed token AND any synonym expansion it matched, so an
+  // acronym search visibly marks the expanded phrase. Longest first, deduped,
+  // so phrase matches win and we avoid wrapping inside an existing match.
+  const terms = [...new Set(tokens.flatMap(searchTermsFor).filter(Boolean))]
+    .sort((a, b) => b.length - a.length);
+  for (const term of terms) {
+    const re = new RegExp(`(?![^<]*>)(${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'ig');
+    safe = safe.replace(re, '<mark>$1</mark>');
+  }
+  return safe;
+}
+
+function onSearchInput(value) {
+  document.getElementById('searchClear').style.display = value ? 'block' : 'none';
+  const tokens = value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if (!tokens.length) {
+    searchMatches = [];
+    searchActiveIdx = -1;
+    const el = document.getElementById('searchResults');
+    el.classList.remove('visible');
+    el.innerHTML = '';
+    return;
+  }
+  searchMatches = runSeriesSearch(value);
+  searchActiveIdx = -1;
+  renderSearchResults(tokens);
+}
+
+function renderSearchResults(tokens) {
+  const el = document.getElementById('searchResults');
+  if (!searchMatches.length) {
+    el.innerHTML = '<div class="search-empty">No matching series</div>';
+    el.classList.add('visible');
+    return;
+  }
+  const shown = searchMatches.slice(0, 50);
+  const active = new Set(state.activeSeries);
+  const meta = searchMatches.length > 50
+    ? `Top 50 of ${searchMatches.length} matches`
+    : `${searchMatches.length} match${searchMatches.length === 1 ? '' : 'es'}`;
+  el.innerHTML = `<div class="search-meta">${meta}</div>` + shown.map((m, i) => {
+    const added = active.has(m.id);
+    return `<div class="search-result${added ? ' added' : ''}${i === searchActiveIdx ? ' active' : ''}" data-idx="${i}">
+      <span class="sr-label">${highlightTokens(m.label, tokens)}${added ? '<span class="sr-added">✓ added</span>' : ''}</span>
+      ${m.category ? `<span class="sr-cat">${highlightTokens(m.category, tokens)}</span>` : ''}
+    </div>`;
+  }).join('');
+  el.classList.add('visible');
+}
+
+function pickSearchResult(idx) {
+  const m = searchMatches[idx];
+  if (!m) return;
+  doAddSeries(m.id);
+  // Keep the dropdown open so several series can be added from one search;
+  // re-render to reflect the new "✓ added" state.
+  const tokens = document.getElementById('seriesSearch').value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  renderSearchResults(tokens);
+  document.getElementById('seriesSearch').focus();
+}
+
+function onSearchKey(e) {
+  const el = document.getElementById('searchResults');
+  const n = Math.min(searchMatches.length, 50);
+  if (e.key === 'ArrowDown' && n) {
+    e.preventDefault();
+    searchActiveIdx = (searchActiveIdx + 1) % n;
+    refreshSearchActive();
+  } else if (e.key === 'ArrowUp' && n) {
+    e.preventDefault();
+    searchActiveIdx = (searchActiveIdx - 1 + n) % n;
+    refreshSearchActive();
+  } else if (e.key === 'Enter' && n) {
+    e.preventDefault();
+    pickSearchResult(searchActiveIdx >= 0 ? searchActiveIdx : 0);
+  } else if (e.key === 'Escape') {
+    el.classList.remove('visible');
+    searchActiveIdx = -1;
+  }
+}
+
+function refreshSearchActive() {
+  const el = document.getElementById('searchResults');
+  el.querySelectorAll('.search-result').forEach(row => {
+    const on = Number(row.dataset.idx) === searchActiveIdx;
+    row.classList.toggle('active', on);
+    if (on) row.scrollIntoView({ block: 'nearest' });
+  });
+}
+
+function clearSeriesSearch() {
+  const input = document.getElementById('seriesSearch');
+  input.value = '';
+  onSearchInput('');
+  input.focus();
+}
+
+// Click a result (delegated so ids with special chars never touch inline HTML),
+// and close the dropdown when clicking elsewhere.
+document.addEventListener('click', e => {
+  const row = e.target.closest('#searchResults .search-result');
+  if (row) { pickSearchResult(Number(row.dataset.idx)); return; }
+  if (!e.target.closest('#searchSection')) {
+    document.getElementById('searchResults')?.classList.remove('visible');
+  }
+});
+
+// ── Series chip tooltip (body-level to escape sidebar overflow clipping) ──────
+(function() {
+  const tip = document.getElementById('series-tooltip');
+  let hideTimer;
+
+  document.getElementById('selectedSeries').addEventListener('mouseover', e => {
+    const chip = e.target.closest('.chip-name[data-full]');
+    if (!chip) return;
+    clearTimeout(hideTimer);
+    tip.textContent = chip.dataset.full;
+    const r = chip.getBoundingClientRect();
+    // Position to the right of the sidebar chip; fall back below if near right edge
+    let left = r.right + 8;
+    let top  = r.top;
+    tip.style.left = left + 'px';
+    tip.style.top  = top + 'px';
+    tip.classList.add('visible');
+    // Reposition if it overflows right edge of viewport
+    requestAnimationFrame(() => {
+      const tr = tip.getBoundingClientRect();
+      if (tr.right > window.innerWidth - 8) {
+        tip.style.left = Math.max(8, window.innerWidth - tr.width - 8) + 'px';
+      }
+      if (tr.bottom > window.innerHeight - 8) {
+        tip.style.top = Math.max(8, window.innerHeight - tr.height - 8) + 'px';
+      }
+    });
+  });
+
+  document.getElementById('selectedSeries').addEventListener('mouseout', e => {
+    const chip = e.target.closest('.chip-name[data-full]');
+    if (!chip) return;
+    hideTimer = setTimeout(() => tip.classList.remove('visible'), 80);
+  });
+})();
+
+function removeSeries(id) {
+  state.activeSeries = state.activeSeries.filter(x => x !== id);
+  delete state.rawData[id];
+  delete state.seriesTransforms[id];
+  state.autoUpdateTo = true;
+  renderSeriesList();
+  if (Object.keys(state.rawData).length) {
+    applyAndRender();
+  } else {
+    updateEmptyState();
+  }
+}
+
+function updateEmptyState() {
+  const el = document.getElementById('chartEmpty');
+  if (!el) return;
+  const hasSeries = state.activeSeries.length > 0;
+  const hasData   = Object.keys(state.rawData).length > 0;
+  if (hasData) return;
+  const p = el.querySelector('p');
+  if (!p) return;
+  if (!Object.keys(CATEGORIES).length) {
+    p.textContent = 'Load a series configuration to begin';
+  } else if (!hasSeries) {
+    p.textContent = 'Select a category, then choose a series to add';
+  } else {
+    p.textContent = `${state.activeSeries.length} series selected — click Fetch Data to load`;
+  }
+}
+
+function setSeriesTransform(sid, t) {
+  state.seriesTransforms[sid] = t;
+  updateFormulaWarn();
+  if (state.activeSeries.length > 1) {
+    document.querySelectorAll('.apply-all-btn').forEach(btn => {
+      btn.style.display = btn.dataset.sid === sid ? '' : 'none';
+    });
+  }
+  if (Object.keys(state.rawData).length) applyAndRender();
+}
+
+function applyTransformToAll(sid) {
+  const t = state.seriesTransforms[sid] || 'level';
+  state.activeSeries.forEach(s => { state.seriesTransforms[s] = t; });
+  document.querySelectorAll('.chip-transform').forEach(sel => { sel.value = t; });
+  document.querySelectorAll('.apply-all-btn').forEach(btn => { btn.style.display = 'none'; });
+  updateFormulaWarn();
+  if (Object.keys(state.rawData).length) applyAndRender();
+}
+
+// Legacy stub — no longer used by UI but kept for safety
+function selectTransform(t) {}
+
+function updateFormulaWarn() {
+  const el = document.getElementById('formulaTransformWarn');
+  if (!el) return;
+  const nonLevel = Object.values(state.seriesTransforms).filter(t => t && t !== 'level');
+  const active = state.formulaResults.length > 0 && nonLevel.length > 0;
+  el.style.display = active ? '' : 'none';
+  if (active) el.textContent = `⚠ Formula is running on transformed values — set all series to Level for ratios or shares.`;
+}
+
+function clearChart() {
+  state.activeSeries = [];
+  state.rawData = {};
+  state.processedData = {};
+  state.seriesUnits = {};
+  state.seriesTransforms = {};
+  state.formulas = [{ expr: '', label: '' }];
+  state.formulaResults = [];
+  state.activeFormulaIdx = 0;
+  renderFormulaRows();
+  state.frequency = 'original';
+  state.pendingSeriesId = null;
+  state.pendingDim1 = null;
+  state.pendingDim4 = null;
+  state.fromYear = 2024; state.fromMonth = 1;
+  state.toYear = new Date().getFullYear(); state.toMonth = 12;
+  state.autoUpdateTo = true;
+  document.getElementById('fromYear').value  = 2024;
+  document.getElementById('fromMonth').value = 1;
+  document.getElementById('toYear').value    = new Date().getFullYear();
+  document.getElementById('toMonth').value   = 12;
+  document.getElementById('freqSelect').value = 'original';
+  const hint = document.getElementById('formulaHint');
+  if (hint) hint.textContent = '';
+  hideDimPanel();
+  renderSeriesList();
+  if (chartInst) { chartInst.destroy(); chartInst = null; }
+  document.getElementById('chartEmpty').style.display = 'flex';
+  document.getElementById('myChart').style.display = 'none';
+  document.getElementById('tableWrap').style.display = 'none';
+  document.getElementById('exportBtn').style.display = 'none';
+  document.getElementById('exportChartBtn').style.display = 'none';
+  document.getElementById('toolbarSources').style.display = 'none';
+  if (Object.keys(CATEGORIES).length) {
+    document.getElementById('chartTitle').textContent = 'Select a category and series to begin';
+  } else {
+    document.getElementById('chartTitle').textContent = 'Load a series configuration to begin';
+  }
+  document.getElementById('statusDot').className = 'status-dot';
+  updateEmptyState();
+}
+
+function switchChart(type) {
+  state.chartType = type;
+  document.querySelectorAll('.tab').forEach(el => el.classList.toggle('active', el.dataset.chart === type));
+  if (Object.keys(state.processedData).length) renderChart();
+}
+
+// ═══════════════════════════════════════════════════════════
+// DATE RANGE
+// ═══════════════════════════════════════════════════════════
+function computeDateRange() {
+  // Frequency must come from the series actually on the chart — NOT the category
+  // currently selected in the dropdown. Adding one quarterly series switches the
+  // dropdown to a quarterly category, which would otherwise force quarter-boundary
+  // snapping on monthly series and truncate their most recent months. Snap to
+  // quarter boundaries only when EVERY active series is quarterly; any monthly or
+  // daily series keeps the full monthly range (quarterly series still return their
+  // own quarters within it).
+  const activeFreqs = state.activeSeries.map(sid => SERIES_MAP[sid]?.sourceFreq).filter(Boolean);
+  const srcFreq = activeFreqs.length && activeFreqs.every(f => f === 'quarterly') ? 'quarterly' : 'monthly';
+  let fromDate, toDate;
+
+  if (srcFreq === 'quarterly') {
+    const fromQStartMonth = (Math.ceil(state.fromMonth / 3) - 1) * 3 + 1;
+    fromDate = `${state.fromYear}-${String(fromQStartMonth).padStart(2, '0')}-01`;
+    // Include the quarter that CONTAINS toMonth — its data either exists or it
+    // doesn't (auto-update trims to the real latest). The old logic snapped to the
+    // PREVIOUS quarter, hiding the most recent complete quarter (e.g. "to December"
+    // returned only through September).
+    const toQEndMonth = Math.ceil(state.toMonth / 3) * 3;   // 3, 6, 9, or 12
+    const lastDay = new Date(state.toYear, toQEndMonth, 0).getDate();
+    toDate = `${state.toYear}-${String(toQEndMonth).padStart(2, '0')}-${lastDay}`;
+  } else {
+    fromDate = `${state.fromYear}-${String(state.fromMonth).padStart(2, '0')}-01`;
+    const lastDay = new Date(state.toYear, state.toMonth, 0).getDate();
+    toDate = `${state.toYear}-${String(state.toMonth).padStart(2, '0')}-${lastDay}`;
+  }
+
+  return { fromDate, toDate };
+}
+
+// ═══════════════════════════════════════════════════════════
+// FETCH
+// ═══════════════════════════════════════════════════════════
+async function fetchData() {
+  toggleDrawer(false);   // on mobile, reveal the chart behind the drawer
+  state.fromYear  = parseInt(document.getElementById('fromYear').value);
+  state.fromMonth = parseInt(document.getElementById('fromMonth').value);
+  state.toYear    = parseInt(document.getElementById('toYear').value);
+  state.toMonth   = parseInt(document.getElementById('toMonth').value);
+  state.frequency = document.getElementById('freqSelect').value;
+
+  if (!state.activeSeries.length) { toast('Select at least one series', 'error'); return; }
+
+  const fromTs = new Date(state.fromYear, state.fromMonth - 1, 1);
+  const toTs   = new Date(state.toYear,   state.toMonth   - 1, 1);
+  if (fromTs >= toTs) { toast('From date must be before To date', 'error'); return; }
+
+  const { fromDate, toDate } = computeDateRange();
+
+  const seriesMeta   = state.activeSeries.map(sid => SERIES_MAP[sid]).filter(Boolean);
+  const statcanMeta  = seriesMeta.filter(sm => sm.tableId !== 'BOC' && sm.tableId !== 'FRED');
+  const bocMeta      = seriesMeta.filter(sm => sm.tableId === 'BOC');
+  const fredMeta     = seriesMeta.filter(sm => sm.tableId === 'FRED');
+
+  setLoading(true);
+  toast('Fetching data…', 'info');
+
+  try {
+    state.rawData    = {};
+    state.seriesUnits = {};
+
+    // ── StatCan fetch ──────────────────────────────────────────────────────
+    if (statcanMeta.length) {
+      const vectors    = statcanMeta.map(s => s.vectorId).join(',');
+      const hasDaily   = statcanMeta.some(sm => sm.sourceFreq === 'daily');
+      const srcFreq    = statcanMeta.some(sm => sm.sourceFreq === 'quarterly') ? 'quarterly' : 'monthly';
+      const yearSpan   = state.toYear - state.fromYear + 1;
+      const perYear    = hasDaily ? 365 : (srcFreq === 'quarterly' ? 4 : 12);
+      const periods    = Math.ceil(yearSpan * perYear * 1.3) + 30;
+
+      const url  = `${PROXY_URL}/api/series?vectors=${encodeURIComponent(vectors)}`
+                 + `&fromDate=${fromDate}&toDate=${toDate}&periods=${periods}`
+                 + (hasDaily ? '&agg=monthly_sum' : '');
+      const resp = await fetch(url);
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${resp.status}`);
+      }
+      const json = await resp.json();
+      const byVectorId = {};
+      json.series.forEach(s => { if (s.vectorId != null) byVectorId[String(s.vectorId)] = s; });
+      statcanMeta.forEach(sm => {
+        const vid = String(sm.vectorId).replace(/^[vV]/i, '');
+        const s = byVectorId[vid];
+        if (!s) return;
+        if (s.error) { toast(`Vector ${vid}: ${s.error}`, 'error'); return; }
+        state.rawData[sm.id]     = s.data;
+        state.seriesUnits[sm.id] = { uom: s.uom || '', uomCode: s.uomCode || 0 };
+      });
+    }
+
+    // ── Bank of Canada fetch ───────────────────────────────────────────────
+    if (bocMeta.length) {
+      const bocVectors = bocMeta.map(s => s.vectorId).join(',');
+      const bocUrl     = `${PROXY_URL}/api/boc?series=${encodeURIComponent(bocVectors)}`
+                       + `&fromDate=${fromDate}&toDate=${toDate}`;
+      const bocResp    = await fetch(bocUrl);
+      if (!bocResp.ok) {
+        const err = await bocResp.json().catch(() => ({}));
+        throw new Error(err.error || `BoC API error: HTTP ${bocResp.status}`);
+      }
+      const bocJson  = await bocResp.json();
+      const bocByVec = {};
+      bocJson.series.forEach(s => { bocByVec[s.vectorId] = s; });
+      bocMeta.forEach(sm => {
+        const s = bocByVec[sm.vectorId];
+        if (!s) return;
+        if (s.error) { toast(`${sm.vectorId}: ${s.error}`, 'error'); return; }
+        state.rawData[sm.id]     = s.data;
+        state.seriesUnits[sm.id] = { uom: s.uom || 'percent', uomCode: 0 };
+      });
+    }
+
+    // ── FRED fetch ────────────────────────────────────────────────────────
+    if (fredMeta.length) {
+      const fredSeries = fredMeta.map(s => s.vectorId).join(',');
+      const fredUrl    = `${PROXY_URL}/api/fred?series=${encodeURIComponent(fredSeries)}`
+                       + `&fromDate=${fromDate}&toDate=${toDate}`;
+      const fredResp   = await fetch(fredUrl);
+      if (!fredResp.ok) {
+        const err = await fredResp.json().catch(() => ({}));
+        throw new Error(err.error || `FRED API error: HTTP ${fredResp.status}`);
+      }
+      const fredJson  = await fredResp.json();
+      const fredByVec = {};
+      fredJson.series.forEach(s => { fredByVec[s.vectorId] = s; });
+      fredMeta.forEach(sm => {
+        const s = fredByVec[sm.vectorId];
+        if (!s) return;
+        state.rawData[sm.id]     = s.data;
+        state.seriesUnits[sm.id] = { uom: s.uom || '', uomCode: 0 };
+      });
+    }
+
+    if (!Object.keys(state.rawData).length) throw new Error('No data returned');
+
+    if (state.autoUpdateTo) {
+      let latestDate = null;
+      for (const pts of Object.values(state.rawData)) {
+        for (const pt of pts) {
+          if (pt.date && (!latestDate || pt.date > latestDate)) latestDate = pt.date;
+        }
+      }
+      if (latestDate) {
+        const d = new Date(latestDate + 'T12:00:00');
+        state.toYear  = d.getFullYear();
+        state.toMonth = d.getMonth() + 1;
+        document.getElementById('toYear').value  = state.toYear;
+        document.getElementById('toMonth').value = state.toMonth;
+      }
+      state.autoUpdateTo = false;
+    }
+
+    setLoading(false);
+    toast('Data loaded ✓', 'success');
+    applyAndRender();
+  } catch (err) {
+    setLoading(false);
+    toast(`Error: ${err.message}`, 'error');
+    console.error(err);
+  }
+}
+
+function setLoading(on) {
+  document.getElementById('fetchBtnText').innerHTML =
+    on ? '<span class="spinner"></span>Fetching…' : '↓ Fetch Data';
+  document.getElementById('fetchBtn').disabled = on;
+  document.getElementById('statusDot').className = 'status-dot ' + (on ? 'loading' : 'loaded');
+}
+
+// ═══════════════════════════════════════════════════════════
+// AGGREGATION
+// ═══════════════════════════════════════════════════════════
+const sum = arr => arr.reduce((a, b) => a + b, 0);
+const avg = arr => sum(arr) / arr.length;
+
+function toMonthly(pts, mode = 'sum') {
+  const map = {};
+  for (const p of pts) {
+    const key = (p.date || p.label).slice(0, 7);
+    if (!map[key]) map[key] = [];
+    map[key].push(p.value);
+  }
+  return Object.entries(map).sort(([a], [b]) => a.localeCompare(b))
+    .map(([label, vals]) => ({ label, value: mode === 'sum' ? sum(vals) : avg(vals) }));
+}
+
+function toQuarterly(pts, srcFreq, mode = 'avg') {
+  if (srcFreq === 'quarterly') return pts.map(p => ({ label: p.label, value: p.value }));
+  const map = {};
+  for (const p of pts) {
+    const d = p.date || p.label;
+    const year = parseInt(d.slice(0, 4));
+    const month = parseInt(d.slice(5, 7)) || 1;
+    const k = `${year} Q${Math.ceil(month / 3)}`;
+    if (!map[k]) map[k] = [];
+    map[k].push(p.value);
+  }
+  return Object.entries(map).sort(([a], [b]) => a.localeCompare(b))
+    .map(([label, vals]) => ({ label, value: mode === 'sum' ? sum(vals) : avg(vals) }));
+}
+
+function toAnnual(pts, mode = 'avg') {
+  const map = {};
+  for (const p of pts) {
+    const year = (p.date || p.label).slice(0, 4);
+    if (!map[year]) map[year] = [];
+    map[year].push(p.value);
+  }
+  return Object.entries(map).sort(([a], [b]) => a.localeCompare(b))
+    .map(([y, vals]) => ({ label: String(y), value: mode === 'sum' ? sum(vals) : avg(vals) }));
+}
+
+// ═══════════════════════════════════════════════════════════
+// TRANSFORMS
+// ═══════════════════════════════════════════════════════════
+function applyTransform(pts, transform) {
+  if (transform === 'level') return pts;
+  if (transform === 'pop') {
+    return pts.slice(1).map((p, i) => ({
+      label: p.label,
+      value: +(((p.value - pts[i].value) / pts[i].value) * 100).toFixed(3)
+    }));
+  }
+  if (transform === 'pop_abs') {
+    return pts.slice(1).map((p, i) => ({
+      label: p.label,
+      value: +(p.value - pts[i].value).toFixed(3)
+    }));
+  }
+  if (transform === 'yoy' || transform === 'yoy_abs') {
+    const sample = pts[0]?.label || '';
+    let step;
+    if      (sample.includes('Q'))                step = 4;
+    else if (/^\d{4}$/.test(sample))              step = 1;
+    else if (/^\d{4}-\d{2}-\d{2}$/.test(sample)) step = 365;
+    else                                           step = 12;
+    if (pts.length <= step) return [];
+    return pts.slice(step).map((p, i) => ({
+      label: p.label,
+      value: transform === 'yoy_abs'
+        ? +(p.value - pts[i].value).toFixed(3)
+        : +(((p.value - pts[i].value) / pts[i].value) * 100).toFixed(3)
+    }));
+  }
+  if (transform === 'index') {
+    if (!pts.length) return pts;
+    const baseVal = pts[0].value;
+    if (baseVal === 0) { toast('Cannot index: first data point is zero', 'error'); return pts; }
+    return pts.map(p => ({ label: p.label, value: +((p.value / baseVal) * 100).toFixed(3) }));
+  }
+  return pts;
+}
+
+function applyRoll12(pts, mode) {
+  if (!pts.length) return pts;
+  const sample = pts[0]?.label || '';
+  const win = sample.includes('Q') ? 4 : /^\d{4}$/.test(sample) ? 1 : 12;
+  if (pts.length < win) return [];
+  return pts.slice(win - 1).map((p, i) => {
+    const slice = pts.slice(i, i + win);
+    const s = slice.reduce((acc, x) => acc + x.value, 0);
+    return { label: p.label, value: +(mode === 'avg' ? s / win : s).toFixed(3) };
+  });
+}
+
+function onFreqChange(val) {
+  state.frequency = val;
+  if (Object.keys(state.rawData).length) applyAndRender();
+}
+
+const FREQ_LABELS = {
+  original:      'Original',
+  monthly_sum:   'Monthly (sum)',
+  quarterly_sum: 'Quarterly (sum)',
+  quarterly_avg: 'Quarterly (avg)',
+  annual_sum:    'Annual (sum)',
+  annual_avg:    'Annual (avg)',
+  roll12_sum:    'Rolling 12-Month Sum',
+  roll12_avg:    'Rolling 12-Month Average',
+};
+
+// ═══════════════════════════════════════════════════════════
+// APPLY + RENDER
+// ═══════════════════════════════════════════════════════════
+function applyAndRender() {
+  const cat = CATEGORIES[state.category];
+  state.processedData = {};
+
+  for (const sid of state.activeSeries) {
+    let pts = state.rawData[sid] || [];
+    if (!pts.length) continue;
+
+    // Use each series' own source frequency so cross-category mixes convert correctly
+    const srcFreq = SERIES_MAP[sid]?.sourceFreq || cat?.sourceFreq || 'monthly';
+
+    let norm;
+    switch (state.frequency) {
+      case 'monthly_sum':    norm = toMonthly(pts, 'sum');              break;
+      case 'quarterly_sum':  norm = toQuarterly(pts, srcFreq, 'sum');   break;
+      case 'quarterly_avg':  norm = toQuarterly(pts, srcFreq, 'avg');   break;
+      case 'annual_sum':     norm = toAnnual(pts, 'sum');               break;
+      case 'annual_avg':     norm = toAnnual(pts, 'avg');               break;
+      case 'roll12_sum':     norm = applyRoll12(pts, 'sum');            break;
+      case 'roll12_avg':     norm = applyRoll12(pts, 'avg');            break;
+      default:               norm = pts.map(p => ({ label: p.label, value: p.value }));
+    }
+
+    norm = applyTransform(norm, state.seriesTransforms[sid] || 'level');
+    state.processedData[sid] = norm;
+  }
+
+  const TLABELS = {
+    level: 'Level', pop: 'Period-over-Period % Change', pop_abs: 'Period-over-Period Change',
+    yoy: 'Year-over-Year % Change', yoy_abs: 'Year-over-Year Change', index: 'Index (start = 100)',
+  };
+  const activeT = state.activeSeries.map(sid => state.seriesTransforms[sid] || 'level');
+  const uniqueT = [...new Set(activeT)];
+  const tLabel  = uniqueT.length === 1 ? (TLABELS[uniqueT[0]] || 'Level') : 'Mixed transforms';
+  const fLabel = FREQ_LABELS[state.frequency] || state.frequency;
+  const cats = [...new Set(state.activeSeries.map(sid => SERIES_MAP[sid]?.category).filter(Boolean))];
+  const catTitle = cats.length === 1 ? cats[0] : cats.length > 1 ? 'Mixed categories' : (cat?.label || '');
+  document.getElementById('chartTitle').textContent =
+    `${catTitle} — ${tLabel} (${fLabel})`;
+
+  const tables = [...new Set(
+    state.activeSeries.map(sid => SERIES_MAP[sid]?.tableId).filter(Boolean)
+  )];
+  const srcEl = document.getElementById('toolbarSources');
+  if (tables.length) {
+    srcEl.style.display = '';
+    srcEl.innerHTML = 'Source: ' + tables
+      .map(t => t === 'FRED'
+        ? `<a href="https://fred.stlouisfed.org" target="_blank">FRED ↗</a>`
+        : `<a href="${cansimUrl(t)}" target="_blank">CANSIM ${t} ↗</a>`)
+      .join(' · ');
+  } else {
+    srcEl.style.display = 'none';
+  }
+
+  computeFormulas();
+  renderChart();
+  renderTable();
+  document.getElementById('exportBtn').style.display = '';
+  document.getElementById('exportChartBtn').style.display = '';
+}
+
+// ═══════════════════════════════════════════════════════════
+// CHART
+// ═══════════════════════════════════════════════════════════
+// Globe & Mail official accessible chart palette
+const PALETTE = ['#8b4061', '#8ecad4', '#c7a479', '#d46868', '#d1d3d4'];
+const FORMULA_PALETTE = ['#8b4061', '#0f6cbd', '#107c41', '#c19c00', '#8764b8'];
+
+function renderChart() {
+  const empty  = document.getElementById('chartEmpty');
+  const canvas = document.getElementById('myChart');
+  const sids   = state.activeSeries.filter(s => state.processedData[s]?.length);
+
+  if (!sids.length && !state.formulaResults.length) {
+    empty.style.display = 'flex'; canvas.style.display = 'none'; return;
+  }
+  empty.style.display = 'none';
+  canvas.style.display = '';
+
+  const formulaLabels = state.formulaResults.flatMap(f => f.points.map(p => p.label));
+  const allLabels = [...new Set([
+    ...sids.flatMap(s => state.processedData[s].map(p => p.label)),
+    ...formulaLabels,
+  ])].sort();
+
+  const allT   = sids.map(sid => state.seriesTransforms[sid] || 'level');
+  const isPct  = allT.length > 0 && allT.every(t => t === 'pop' || t === 'yoy');
+  const isAbs  = allT.length > 0 && allT.every(t => t === 'pop_abs' || t === 'yoy_abs');
+  const isChg  = isPct || isAbs;
+  const isIdx  = allT.length > 0 && allT.every(t => t === 'index');
+  const isBar     = state.chartType === 'bar';
+  const isStacked = state.chartType === 'stacked';
+  const isArea    = state.chartType === 'area';
+
+  const formulaActive = state.formulaResults.length > 0;
+
+  const activeUoms = [...new Set(sids.map(sid => state.seriesUnits?.[sid]?.uom).filter(Boolean))];
+  const yAxisUnit  = formulaActive ? ''
+    : isPct ? 'percent' : isIdx ? 'index'
+    : (activeUoms.length === 1 ? activeUoms[0] : activeUoms.length > 1 ? 'mixed units' : '');
+
+  const datasets = formulaActive ? [] : sids.map((sid, i) => {
+    const meta  = SERIES_MAP[sid];
+    const dmap  = Object.fromEntries(state.processedData[sid].map(p => [p.label, p.value]));
+    const data  = allLabels.map(l => dmap[l] ?? null);
+    const color = PALETTE[i % PALETTE.length];
+    return {
+      type:             (isBar || isStacked) ? 'bar' : 'line',
+      label:            meta ? (meta.chipLabel || meta.name) : sid,
+      data,
+      borderColor:      color,
+      backgroundColor:  (isBar || isStacked) ? color + 'cc' : isArea ? color + '28' : 'transparent',
+      fill:             isArea,
+      tension:          0.35,
+      pointRadius:      allLabels.length > 80 ? 0 : 2,
+      pointHoverRadius: 4,
+      borderWidth:      (isBar || isStacked) ? 1 : 2,
+    };
+  });
+
+  if (formulaActive) {
+    state.formulaResults.forEach((f, fi) => {
+      const color = FORMULA_PALETTE[fi % FORMULA_PALETTE.length];
+      const fdmap = Object.fromEntries(f.points.map(p => [p.label, p.value]));
+      const fdata = allLabels.map(l => fdmap[l] ?? null);
+      datasets.push({
+        type: 'line', label: f.label || formulaLabel(f.expr), data: fdata,
+        borderColor: color,
+        backgroundColor: isArea ? color + '28' : 'transparent',
+        fill: isArea, tension: 0.35,
+        pointRadius: allLabels.length > 80 ? 0 : 3,
+        pointHoverRadius: 5, borderWidth: 2.5,
+      });
+    });
+  }
+
+  const maxShow = 16;
+  const step    = Math.max(1, Math.ceil(allLabels.length / maxShow));
+  const xLabels = allLabels.map((l, i) => i % step === 0 ? l : '');
+
+  if (chartInst) chartInst.destroy();
+  chartInst = new Chart(canvas, {
+    data: { labels: allLabels, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: {
+          labels: { color: '#242424', font: { family: "Segoe UI, system-ui, sans-serif", size: 12 }, boxWidth: 12, padding: 14 }
+        },
+        tooltip: {
+          backgroundColor: '#ffffff', borderColor: '#e1dfdd', borderWidth: 1,
+          titleColor: '#605e5c', bodyColor: '#242424',
+          titleFont: { family: "Segoe UI, system-ui, sans-serif", size: 12 }, bodyFont: { family: "Segoe UI, system-ui, sans-serif", size: 12 },
+          callbacks: {
+            label: ctx => {
+              const v = ctx.parsed.y;
+              if (v == null) return null;
+              const fmt  = v.toLocaleString('en-CA', { maximumFractionDigits: 2 });
+              const sid  = sids[ctx.datasetIndex];
+              const t    = sid ? (state.seriesTransforms[sid] || 'level') : 'level';
+              const sPct = t === 'pop' || t === 'yoy';
+              const sChg = sPct || t === 'pop_abs' || t === 'yoy_abs';
+              const sfx  = sPct ? '%' : '';
+              // Value only — the colored swatch + legend identify the series.
+              // (Full series names made the tooltip so wide the value scrolled off-screen.)
+              return ` ${sChg && v > 0 ? '+' : ''}${fmt}${sfx}`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          stacked: isStacked,
+          ticks: { color: '#605e5c', font: { family: "Segoe UI, system-ui, sans-serif", size: 10 }, maxRotation: 45, callback: (_, i) => xLabels[i] },
+          grid: { color: 'rgba(0,0,0,0.07)' }
+        },
+        y: {
+          stacked: isStacked,
+          title: { display: !!yAxisUnit, text: yAxisUnit, color: '#605e5c', font: { family: "Segoe UI, system-ui, sans-serif", size: 11 }, padding: { bottom: 4 } },
+          ticks: {
+            color: '#605e5c', font: { family: "Segoe UI, system-ui, sans-serif", size: 11 },
+            callback: v => {
+              const sfx = isPct ? '%' : '';
+              if (!isPct && Math.abs(v) >= 1e12) return (v / 1e12).toFixed(1) + 'T';
+              if (!isPct && Math.abs(v) >= 1e9)  return (v / 1e9).toFixed(1)  + 'B';
+              if (!isPct && Math.abs(v) >= 1e6)  return (v / 1e6).toFixed(1)  + 'M';
+              if (Math.abs(v) >= 1e3)            return (v / 1e3).toFixed(1)  + 'K' + sfx;
+              return v.toFixed(1) + sfx;
+            }
+          },
+          grid: { color: ctx => ctx.tick.value === 0 ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.07)' }
+        }
+      }
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+// TABLE
+// ═══════════════════════════════════════════════════════════
+function renderTable() {
+  const wrap = document.getElementById('tableWrap');
+  const sids = state.activeSeries.filter(s => state.processedData[s]?.length);
+  const hasFormula = state.formulaResults.length > 0;
+  if (!sids.length && !hasFormula) { wrap.style.display = 'none'; return; }
+  wrap.style.display = '';
+
+  const formulaLabels = state.formulaResults.flatMap(f => f.points.map(p => p.label));
+  const allLabels = [...new Set([
+    ...sids.flatMap(s => state.processedData[s].map(p => p.label)),
+    ...formulaLabels,
+  ])].sort();
+
+  const getSuffix = sid => {
+    const t = state.seriesTransforms[sid] || 'level';
+    return (t === 'pop' || t === 'yoy') ? ' (%)' : (t === 'pop_abs' || t === 'yoy_abs') ? ' (chg)' : t === 'index' ? ' (start=100)' : '';
+  };
+  const isSeriesChg = sid => { const t = state.seriesTransforms[sid] || 'level'; return t !== 'level' && t !== 'index'; };
+
+  if (hasFormula) {
+    const cols = state.formulaResults.map((f, fi) => ({
+      color: FORMULA_PALETTE[fi % FORMULA_PALETTE.length],
+      name:  f.label || formulaLabel(f.expr),
+      dmap:  Object.fromEntries(f.points.map(p => [p.label, p.value])),
+    }));
+    const fLabels = [...new Set(formulaLabels)].sort();
+    document.getElementById('tableHead').innerHTML =
+      `<tr><th>Period</th>${cols.map(c => `<th style="color:${c.color}">${c.name}</th>`).join('')}</tr>`;
+    document.getElementById('tableBody').innerHTML =
+      fLabels.slice(-60).map(label => {
+        const cells = cols.map(c => {
+          const v = c.dmap[label];
+          if (v == null) return '<td class="num">—</td>';
+          const cls = v > 0 ? '' : v < 0 ? 'neg' : '';
+          return `<td class="num ${cls}" style="color:${c.color}">${v.toLocaleString('en-CA', { maximumFractionDigits: 4 })}</td>`;
+        }).join('');
+        return `<tr><td>${label}</td>${cells}</tr>`;
+      }).join('');
+  } else {
+    document.getElementById('tableHead').innerHTML =
+      `<tr><th>Period</th>${sids.map(sid => {
+        const s = SERIES_MAP[sid]; const n = s ? (s.chipLabel || s.name) : sid;
+        return `<th>${n}${getSuffix(sid)}</th>`;
+      }).join('')}</tr>`;
+    document.getElementById('tableBody').innerHTML =
+      allLabels.slice(-60).map(label => {
+        const cells = sids.map(sid => {
+          const dmap = Object.fromEntries(state.processedData[sid].map(p => [p.label, p.value]));
+          const v = dmap[label];
+          if (v == null) return '<td class="num">—</td>';
+          const chg  = isSeriesChg(sid);
+          const cls  = chg ? (v > 0 ? 'pos' : v < 0 ? 'neg' : '') : '';
+          const sign = chg && v > 0 ? '+' : '';
+          return `<td class="num ${cls}">${sign}${v.toLocaleString('en-CA', { maximumFractionDigits: 2 })}</td>`;
+        }).join('');
+        return `<tr><td>${label}</td>${cells}</tr>`;
+      }).join('');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// EXPORT
+// ═══════════════════════════════════════════════════════════
+function exportXlsx() {
+  const sids = state.activeSeries.filter(s => state.processedData[s]?.length);
+  if (!sids.length) return;
+
+  const cat    = CATEGORIES[state.category];
+  const fLabel = FREQ_LABELS[state.frequency] || state.frequency;
+  const XLABELS = { level:'Level', pop:'Period-over-Period % Change', pop_abs:'Period-over-Period Change', yoy:'Year-over-Year % Change', yoy_abs:'Year-over-Year Change', index:'Index (start = 100)' };
+  const getXSuffix = sid => { const t = state.seriesTransforms[sid] || 'level'; return (t==='pop'||t==='yoy') ? ' (%)' : (t==='pop_abs'||t==='yoy_abs') ? ' (chg)' : t==='index' ? ' (start=100)' : ''; };
+  const uniqueXT = [...new Set(sids.map(sid => state.seriesTransforms[sid] || 'level'))];
+  const tLabel   = uniqueXT.length === 1 ? (XLABELS[uniqueXT[0]] || 'Level') : 'Mixed transforms';
+  const names    = sids.map(sid => { const s = SERIES_MAP[sid]; return s ? (s.chipLabel || s.name) : sid; });
+
+  const allLabels = [...new Set(sids.flatMap(s => state.processedData[s].map(p => p.label)))].sort();
+  const hasFormula = state.formulaResults.length > 0;
+
+  const rows = allLabels.map(label => {
+    const row = [label];
+    for (const sid of sids) {
+      const dmap = Object.fromEntries(state.processedData[sid].map(p => [p.label, p.value]));
+      row.push(dmap[label] ?? '');
+    }
+    return row;
+  });
+
+  const tables     = [...new Set(sids.map(sid => SERIES_MAP[sid]?.tableId).filter(Boolean))];
+  const cansimUrls = tables.map(t => `${t}: ${cansimUrl(t)}`).join('; ');
+
+  const wb = XLSX.utils.book_new();
+
+  let wsData;
+  if (hasFormula) {
+    const fcols = state.formulaResults.map(f => ({
+      name: f.label || formulaLabel(f.expr),
+      expr: f.expr,
+      dmap: Object.fromEntries(f.points.map(p => [p.label, p.value])),
+    }));
+    const fLabels = [...new Set(state.formulaResults.flatMap(f => f.points.map(p => p.label)))].sort();
+    wsData = XLSX.utils.aoa_to_sheet([
+      [`Statistics Canada — ${cat?.label}`],
+      [`Formulas: ${fcols.map(c => `${c.name} [${c.expr}]`).join('   |   ')}`, `Output Frequency: ${fLabel}`, `Exported: ${new Date().toLocaleDateString('en-CA')}`],
+      [`From: ${state.fromYear}-${String(state.fromMonth).padStart(2,'0')}`, `To: ${state.toYear}-${String(state.toMonth).padStart(2,'0')}`],
+      [], ['Period', ...fcols.map(c => c.name)],
+      ...fLabels.map(label => [label, ...fcols.map(c => c.dmap[label] ?? '')])
+    ]);
+    wsData['!cols'] = [{ wch: 14 }, ...fcols.map(() => ({ wch: 28 }))];
+  } else {
+    wsData = XLSX.utils.aoa_to_sheet([
+      [`Statistics Canada — ${cat?.label}`],
+      [`Transform: ${tLabel}`, `Output Frequency: ${fLabel}`, `Exported: ${new Date().toLocaleDateString('en-CA')}`],
+      [`From: ${state.fromYear}-${String(state.fromMonth).padStart(2,'0')}`, `To: ${state.toYear}-${String(state.toMonth).padStart(2,'0')}`],
+      [], ['Period', ...sids.map((sid, i) => `${names[i]}${getXSuffix(sid)}`)],
+      ...rows
+    ]);
+    wsData['!cols'] = [{ wch: 14 }, ...sids.map(() => ({ wch: 38 }))];
+  }
+  XLSX.utils.book_append_sheet(wb, wsData, 'Data');
+
+  const wsMeta = XLSX.utils.aoa_to_sheet([
+    ['Field', 'Value'],
+    ['Category',         cat?.label || ''],
+    ['Transform',        tLabel],
+    ['Output Frequency', fLabel],
+    ['Source Frequency', cat?.sourceFreq || ''],
+    ['From',             `${state.fromYear}-${String(state.fromMonth).padStart(2,'0')}`],
+    ['To',               `${state.toYear}-${String(state.toMonth).padStart(2,'0')}`],
+    ['Series',           names.join('; ')],
+    ['CANSIM URLs',      cansimUrls],
+    ['Source',           'Statistics Canada'],
+    ['Exported',         new Date().toISOString()],
+  ]);
+  wsMeta['!cols'] = [{ wch: 18 }, { wch: 80 }];
+  XLSX.utils.book_append_sheet(wb, wsMeta, 'Metadata');
+
+  const safeLabel = tLabel.replace(/[^a-z0-9]/gi, '_');
+  XLSX.writeFile(wb, `statcan_lab_${safeLabel}_${state.fromYear}${String(state.fromMonth).padStart(2,'0')}-${state.toYear}${String(state.toMonth).padStart(2,'0')}.xlsx`);
+  toast('Spreadsheet exported ✓', 'success');
+}
+
+// ── Export chart as a PNG image, with user-editable series names ──
+// Opens a small modal pre-filled with the current chart title and each
+// dataset's legend label so the user can rename series before download.
+function openChartExport() {
+  if (!chartInst || !chartInst.data.datasets.length) {
+    toast('Render a chart first', 'error');
+    return;
+  }
+  // Pre-fill the title from the toolbar title, stripping any wrapping quotes.
+  const rawTitle = (document.getElementById('chartTitle').textContent || '').trim();
+  document.getElementById('cxTitle').value = rawTitle.replace(/^["“]|["”]$/g, '');
+
+  const list = document.getElementById('cxSeriesList');
+  list.innerHTML = chartInst.data.datasets.map((ds, i) => {
+    const color = typeof ds.borderColor === 'string' ? ds.borderColor : '#605e5c';
+    const safe  = String(ds.label ?? '').replace(/"/g, '&quot;');
+    return `<div class="cx-series-row">
+      <span class="cx-swatch" style="background:${color}"></span>
+      <input class="cx-input cx-series-name" data-idx="${i}" type="text" value="${safe}" autocomplete="off">
+    </div>`;
+  }).join('');
+
+  document.getElementById('cxSource').value = defaultChartSource();
+
+  document.getElementById('chartExportOverlay').classList.add('open');
+  document.getElementById('cxTitle').focus();
+}
+
+// Build a sensible default attribution from the active series' source tables,
+// mirroring the toolbar "Source:" line. User can edit it before download.
+function defaultChartSource() {
+  const tables = [...new Set(state.activeSeries.map(sid => SERIES_MAP[sid]?.tableId).filter(Boolean))];
+  if (!tables.length) return 'Source: Statistics Canada';
+  const labels = tables.map(t =>
+    t === 'FRED' ? 'FRED (Federal Reserve Bank of St. Louis)'
+    : `Statistics Canada, Table ${t}`);
+  return 'Source: ' + [...new Set(labels)].join('; ');
+}
+
+function closeChartExport() {
+  document.getElementById('chartExportOverlay').classList.remove('open');
+}
+
+function downloadChartImage() {
+  if (!chartInst) return;
+  const title  = document.getElementById('cxTitle').value.trim();
+  const source = document.getElementById('cxSource').value.trim();
+  const inputs = [...document.querySelectorAll('.cx-series-name')];
+
+  // Custom name per dataset, keyed by the input's index.
+  const names = chartInst.data.datasets.map(ds => ds.label);
+  inputs.forEach(inp => {
+    const idx = +inp.dataset.idx;
+    if (chartInst.data.datasets[idx]) names[idx] = inp.value.trim() || names[idx];
+  });
+
+  // Render the export at a FIXED resolution (independent of screen/retina) with
+  // font sizes tuned for that resolution, so axis/legend text never goes tiny.
+  // The on-screen chart is never touched — we build a separate off-screen chart.
+  const EXPORT_W = 1200, EXPORT_H = 675;
+  const EFONT = "Segoe UI, system-ui, sans-serif";
+  const liveX = chartInst.options.scales.x;
+  const liveY = chartInst.options.scales.y;
+  // Reuse the live axis number-formatting callbacks (safe — they don't touch the
+  // tick context), but rebuild grid/title locally so we don't share scriptable
+  // option objects with the live chart (that crashes the export render).
+  const yUnit = (liveY.title && liveY.title.display) ? liveY.title.text : '';
+
+  const canvas = document.createElement('canvas');
+  canvas.width = EXPORT_W; canvas.height = EXPORT_H;
+
+  const exportChart = new Chart(canvas, {
+    data: {
+      labels: chartInst.data.labels,
+      datasets: chartInst.data.datasets.map((ds, i) => ({ ...ds, label: names[i] })),
+    },
+    options: {
+      responsive: false, maintainAspectRatio: false, animation: false, devicePixelRatio: 1,
+      layout: { padding: 16 },
+      plugins: {
+        legend: { labels: { color: '#242424', font: { family: EFONT, size: 14 }, boxWidth: 14, padding: 16 } },
+        tooltip: { enabled: false },
+        title: {
+          display: !!title, text: title,
+          color: '#242424', font: { family: 'Georgia, serif', size: 22, weight: '700' },
+          padding: { top: 4, bottom: 18 },
+        },
+        subtitle: {
+          display: !!source, text: source, position: 'bottom', align: 'start',
+          color: '#605e5c', font: { family: EFONT, size: 12, style: 'italic' },
+          padding: { top: 14, bottom: 2 },
+        },
+      },
+      scales: {
+        x: {
+          stacked: liveX.stacked,
+          grid: { color: 'rgba(0,0,0,0.07)' },
+          ticks: { color: '#605e5c', font: { family: EFONT, size: 13 }, maxRotation: 45, callback: liveX.ticks.callback },
+        },
+        y: {
+          stacked: liveY.stacked,
+          title: { display: !!yUnit, text: yUnit, color: '#605e5c', font: { family: EFONT, size: 12 } },
+          grid: { color: ctx => (ctx && ctx.tick && ctx.tick.value === 0) ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.07)' },
+          ticks: { color: '#605e5c', font: { family: EFONT, size: 13 }, callback: liveY.ticks.callback },
+        },
+      },
+    },
+  });
+
+  let tmp;
+  try {
+    // Composite the (transparent) chart canvas onto a white background.
+    tmp = document.createElement('canvas');
+    tmp.width = canvas.width; tmp.height = canvas.height;
+    const ctx = tmp.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, tmp.width, tmp.height);
+    ctx.drawImage(canvas, 0, 0);
+  } catch (e) {
+    exportChart.destroy();
+    console.error('Chart export failed', e);
+    toast('Chart export failed', 'error');
+    return;
+  }
+  exportChart.destroy();
+
+  const slug = (title || 'chart').replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '').toLowerCase() || 'chart';
+  const fname = `statcan_chart_${slug}_${new Date().toISOString().slice(0,10)}.png`;
+
+  // Trigger the actual download. Prefer a Blob object URL (reliable); fall back
+  // to a data: URL if Blobs are unavailable. `done` guards against the fallback
+  // timer and the toBlob callback both firing.
+  let done = false;
+  const triggerDownload = (href, isObjUrl) => {
+    if (done) return;
+    done = true;
+    const a = document.createElement('a');
+    a.href = href;
+    a.download = fname;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    if (isObjUrl) setTimeout(() => URL.revokeObjectURL(href), 1000);
+    toast('Chart image exported ✓', 'success');
+  };
+  const fallbackToDataUrl = () => { try { triggerDownload(tmp.toDataURL('image/png'), false); } catch (e) { console.error(e); toast('Chart export failed', 'error'); } };
+
+  try {
+    tmp.toBlob(blob => {
+      if (blob) triggerDownload(URL.createObjectURL(blob), true);
+      else fallbackToDataUrl();
+    }, 'image/png');
+    // Safety net: if toBlob never invokes its callback, fall back after a beat.
+    setTimeout(fallbackToDataUrl, 1200);
+  } catch (e) {
+    fallbackToDataUrl();
+  }
+
+  closeChartExport();
+}
+
+// ═══════════════════════════════════════════════════════════
+// CATALOG BROWSER
+// ═══════════════════════════════════════════════════════════
+function catalogStats() {
+  let nCat = 0, nSeries = 0, nVec = 0;
+  for (const cat of Object.values(CATEGORIES)) {
+    nCat++;
+    const series = cat.series || [];
+    nSeries += series.length;
+    for (const s of series) nVec += s.vectors ? Object.keys(s.vectors).length : 1;
+  }
+  return { nCat, nSeries, nVec };
+}
+
+function openCatalog() {
+  const { nCat, nSeries, nVec } = catalogStats();
+  document.getElementById('catalogSummary').textContent =
+    `${nCat} categories · ${nSeries} series · ${nVec.toLocaleString()} vectors`;
+  document.getElementById('catalogSearch').value = '';
+  renderCatalogBrowser('');
+  document.getElementById('catalogOverlay').classList.add('open');
+  document.getElementById('catalogSearch').focus();
+}
+
+function closeCatalog() {
+  document.getElementById('catalogOverlay').classList.remove('open');
+}
+
+function catalogJump(catId) {
+  closeCatalog();
+  if (!CATEGORIES[catId]) return;
+  const sel = document.getElementById('categorySelect');
+  if (sel) sel.value = catId;
+  selectCategory(catId);
+  toggleDrawer(false);
+}
+
+function renderCatalogBrowser(query) {
+  const tokens = (query || '').toLowerCase().split(/\s+/).filter(Boolean);
+  const match = (txt) => { const hay = txt.toLowerCase(); return tokens.every(t => tokenMatchesHay(t, hay)); };
+  let html = '';
+  for (const cat of Object.values(CATEGORIES)) {
+    const series = cat.series || [];
+    const catText = cat.label || cat.id || '';
+    const catMatches = match(catText);
+    let list;
+    if (!tokens.length || catMatches) list = series;
+    else list = series.filter(s => match(`${catText} ${s.name || ''} ${s.tableId || ''}`));
+    if (tokens.length && !catMatches && list.length === 0) continue;
+
+    const totalVec = series.reduce((n, s) => n + (s.vectors ? Object.keys(s.vectors).length : 1), 0);
+    html += `<div class="catalog-cat">
+      <div class="catalog-cat-head" onclick="catalogJump('${cat.id}')" title="Load this category in the explorer">
+        <span class="name">${escapeHtml(cat.label || cat.id)}</span>
+        <span class="meta">${series.length} series · ${totalVec.toLocaleString()} vectors</span>
+        <span class="jump">→ open</span>
+      </div>`;
+
+    if (list.length === 0) {
+      html += `<div class="catalog-series-row"><span class="sname" style="color:var(--muted)">No series</span></div>`;
+    } else {
+      for (const s of list) {
+        const variants = s.vectors ? Object.keys(s.vectors).length : 1;
+        const tid = s.tableId || '';
+        const isStatcan = /^\d{2}-\d{2}-\d{4}/.test(tid);
+        const tblHtml = isStatcan
+          ? `<a class="tbl" href="${cansimUrl(tid)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${tid}</a>`
+          : (tid ? `<span class="tbl-plain">${escapeHtml(tid)}</span>` : '');
+        html += `<div class="catalog-series-row">
+          <span class="sname">${escapeHtml(s.name || s.id)}</span>
+          <span class="vbadge">${variants.toLocaleString()} vector${variants === 1 ? '' : 's'}</span>
+          ${tblHtml}
+        </div>`;
+      }
+    }
+    html += `</div>`;
+  }
+  if (!html) html = `<div class="catalog-empty">No categories or series match “${escapeHtml(query)}”.</div>`;
+  document.getElementById('catalogBody').innerHTML = html;
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { closeCatalog(); closeChartExport(); }
+});
+
+// ═══════════════════════════════════════════════════════════
+// TOAST
+// ═══════════════════════════════════════════════════════════
+let toastTimer;
+function toast(msg, type = 'info') {
+  document.querySelector('.toast')?.remove();
+  clearTimeout(toastTimer);
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.textContent = msg;
+  document.body.appendChild(el);
+  toastTimer = setTimeout(() => el.remove(), 3000);
+}
+
+// ═══════════════════════════════════════════════════════════
+// FORMULA PANEL
+// ═══════════════════════════════════════════════════════════
+function formulaLabel(expr) {
+  const LETTERS = ['A', 'B', 'C', 'D', 'E'];
+  return expr.toUpperCase().replace(/\b([A-E])\b/g, (_, l) => {
+    const idx = LETTERS.indexOf(l);
+    const sid = state.activeSeries[idx];
+    const s   = sid ? SERIES_MAP[sid] : null;
+    return s ? (s.chipLabel || s.name) : l;
+  });
+}
+
+// Evaluate a single formula expression → array of {label,value}, or null.
+// Toasts on error. Pure w.r.t. state (reads active series + processed data).
+function evalFormulaExpr(rawExpr) {
+  let expr = (rawExpr || '').trim().toUpperCase();
+  if (!expr) return null;
+
+  // Pre-process convenience functions and fix ^ → ** (exponentiation)
+  expr = expr
+    .replace(/\bSUM\s*\(([^)]+)\)/g, (_, args) => '(' + args.split(',').map(s => s.trim()).join('+') + ')')
+    .replace(/\bAVG\s*\(([^)]+)\)/g, (_, args) => { const p = args.split(',').map(s => s.trim()); return '((' + p.join('+') + ')/' + p.length + ')'; })
+    .replace(/\^/g, '**');
+
+  const LETTERS = ['A', 'B', 'C', 'D', 'E'];
+  const usedLetters = LETTERS.filter(l => new RegExp(`\\b${l}\\b`).test(expr));
+  if (!usedLetters.length) return null;
+
+  for (const l of usedLetters) {
+    const idx = LETTERS.indexOf(l);
+    const sid = state.activeSeries[idx];
+    if (!sid || !state.processedData[sid]?.length) {
+      toast(`Formula error: series ${l} has no data`, 'error'); return null;
+    }
+  }
+
+  // Validate: whitelist known identifiers + operators; reject anything else
+  const check = expr
+    .replace(/\b(ABS|SQRT|LOG10|LOG2|LOG|MIN|MAX|ROUND|FLOOR|CEIL|POW|A|B|C|D|E)\b/g, '')
+    .replace(/[0-9.+\-*/().%,\s]/g, '');
+  if (check.length) {
+    toast('Formula contains invalid characters', 'error'); return null;
+  }
+
+  const dmaps = {};
+  for (const l of usedLetters) {
+    const idx = LETTERS.indexOf(l);
+    const sid = state.activeSeries[idx];
+    dmaps[l] = Object.fromEntries(state.processedData[sid].map(p => [p.label, p.value]));
+  }
+
+  const labelSets    = usedLetters.map(l => new Set(Object.keys(dmaps[l])));
+  const commonLabels = [...labelSets[0]].filter(lbl => labelSets.every(s => s.has(lbl))).sort();
+  if (!commonLabels.length) {
+    toast('Formula: no overlapping periods between selected series', 'error'); return null;
+  }
+
+  const results = [];
+  for (const label of commonLabels) {
+    const vars = {};
+    let skip = false;
+    for (const l of usedLetters) {
+      const v = dmaps[l][label];
+      if (v == null || !isFinite(v)) { skip = true; break; }
+      vars[l] = v;
+    }
+    if (skip) continue;
+    try {
+      const fn = new Function(
+        'A', 'B', 'C', 'D', 'E',
+        'ABS', 'SQRT', 'LOG', 'LOG2', 'LOG10', 'MIN', 'MAX', 'ROUND', 'FLOOR', 'CEIL', 'POW',
+        `"use strict"; return (${expr});`
+      );
+      const v = fn(
+        vars['A'] ?? 0, vars['B'] ?? 0, vars['C'] ?? 0, vars['D'] ?? 0, vars['E'] ?? 0,
+        Math.abs, Math.sqrt, Math.log, Math.log2, Math.log10,
+        Math.min, Math.max, Math.round, Math.floor, Math.ceil, Math.pow
+      );
+      if (isFinite(v)) results.push({ label, value: v });
+    } catch (e) {
+      toast(`Formula error: ${e.message}`, 'error');
+      return null;
+    }
+  }
+  return results.length ? results : null;
+}
+
+// Evaluate every formula row → state.formulaResults (skips blank rows).
+function computeFormulas() {
+  state.formulaResults = [];
+  for (const f of state.formulas) {
+    if (!f.expr || !f.expr.trim()) continue;
+    const points = evalFormulaExpr(f.expr);
+    if (points) state.formulaResults.push({ expr: f.expr, label: (f.label || '').trim(), points });
+  }
+}
+
+// Render one input row per formula: expression + optional label + remove button.
+function renderFormulaRows() {
+  const host = document.getElementById('formulaRows');
+  if (!host) return;
+  if (!state.formulas.length) state.formulas = [{ expr: '', label: '' }];
+  const multi = state.formulas.length > 1;
+  host.innerHTML = state.formulas.map((f, i) => `
+    <div style="display:flex;gap:4px;align-items:center;margin-bottom:4px">
+      <input type="text" value="${escHtml(f.expr)}" placeholder="e.g. B/A"
+             onfocus="state.activeFormulaIdx=${i}"
+             oninput="updateFormulaExpr(${i}, this.value)"
+             onkeydown="if(event.key==='Enter')applyFormulas()"
+             style="flex:1;min-width:0;font-family:var(--font-mono);font-size:11px;height:28px;border:1px solid var(--border);border-radius:4px;padding:0 6px">
+      <input type="text" value="${escHtml(f.label)}" placeholder="label"
+             oninput="updateFormulaLabel(${i}, this.value)"
+             onkeydown="if(event.key==='Enter')applyFormulas()"
+             title="Optional legend label"
+             style="width:78px;flex-shrink:0;font-size:11px;height:28px;border:1px solid var(--border);border-radius:4px;padding:0 6px">
+      ${multi ? `<button onclick="removeFormula(${i})" title="Remove line"
+             style="flex-shrink:0;padding:0 7px;height:28px;border:1px solid var(--border);background:var(--surface2);border-radius:4px;cursor:pointer;font-size:12px;color:var(--muted)">✕</button>` : ''}
+    </div>`).join('');
+  document.querySelectorAll('.formula-preset').forEach(btn => {
+    const cur = (state.formulas[state.activeFormulaIdx]?.expr || '').toUpperCase();
+    btn.classList.toggle('formula-active', btn.dataset.expr === cur);
+  });
+}
+
+function updateFormulaExpr(i, val) {
+  if (!state.formulas[i]) return;
+  state.formulas[i].expr = val;
+  state.activeFormulaIdx = i;
+  document.querySelectorAll('.formula-preset').forEach(btn =>
+    btn.classList.toggle('formula-active', btn.dataset.expr === val.toUpperCase()));
+  const hint = document.getElementById('formulaHint');
+  if (hint) hint.textContent = val.trim() ? '↵ Press Enter to apply' : '';
+}
+
+function updateFormulaLabel(i, val) {
+  if (state.formulas[i]) state.formulas[i].label = val;
+}
+
+function addFormula() {
+  state.formulas.push({ expr: '', label: '' });
+  state.activeFormulaIdx = state.formulas.length - 1;
+  renderFormulaRows();
+  document.querySelectorAll('#formulaRows input')[(state.formulas.length - 1) * 2]?.focus();
+}
+
+function removeFormula(i) {
+  state.formulas.splice(i, 1);
+  if (!state.formulas.length) state.formulas = [{ expr: '', label: '' }];
+  state.activeFormulaIdx = Math.min(state.activeFormulaIdx, state.formulas.length - 1);
+  renderFormulaRows();
+  applyFormulas();
+}
+
+// Preset buttons write into the currently-focused formula row.
+function setFormula(expr) {
+  const i = Math.min(state.activeFormulaIdx, state.formulas.length - 1);
+  state.formulas[i].expr = expr;
+  renderFormulaRows();
+  applyFormulas();
+}
+
+function clearFormulas() {
+  state.formulas = [{ expr: '', label: '' }];
+  state.formulaResults = [];
+  state.activeFormulaIdx = 0;
+  renderFormulaRows();
+  const hint = document.getElementById('formulaHint');
+  if (hint) hint.textContent = '';
+  updateFormulaWarn();
+  renderChart();
+  renderTable();
+}
+
+function applyFormulas() {
+  const hint = document.getElementById('formulaHint');
+  if (hint) hint.textContent = '';
+  computeFormulas();
+  updateFormulaWarn();
+  renderChart();
+  renderTable();
+}
+
+// ═══════════════════════════════════════════════════════════
+// SAVED CONFIGURATIONS  (bookmark-based, no local list)
+// ═══════════════════════════════════════════════════════════
+function escHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function _encodeConfig(config) {
+  try { return btoa(unescape(encodeURIComponent(JSON.stringify(config)))); } catch(e) { return null; }
+}
+function _decodeConfig(str) {
+  try { return JSON.parse(decodeURIComponent(escape(atob(str)))); } catch(e) { return null; }
+}
+
+function showBookmarkPrompt(name) {
+  const msg = document.getElementById('cfgBookmarkMsg');
+  if (!msg) return;
+  const isMac = /mac/i.test(navigator.platform);
+  const key   = isMac ? '⌘D' : 'Ctrl+D';
+  msg.style.display = '';
+  msg.innerHTML = `<div style="font-size:11px;padding:8px 10px;background:rgba(22,163,74,0.08);border:1px solid rgba(22,163,74,0.3);border-radius:5px;color:var(--success);line-height:1.6;margin-top:6px">
+    ✓ Ready to bookmark as <strong>${escHtml(name)}</strong><br>
+    Press <strong>${key}</strong> to save it in Chrome — the name is pre-filled.
+  </div>`;
+  clearTimeout(showBookmarkPrompt._t);
+  showBookmarkPrompt._t = setTimeout(() => { msg.style.display = 'none'; }, 10000);
+}
+
+function startSaveConfig() {
+  if (!state.activeSeries.length) {
+    toast('Add at least one series before saving', 'error');
+    return;
+  }
+  document.getElementById('cfgSavePanel').style.display = '';
+  document.getElementById('cfgSaveName').value = '';
+  document.getElementById('btnCfgAdd').style.display = 'none';
+  document.getElementById('cfgSaveName').focus();
+}
+
+function cancelSaveConfig() {
+  document.getElementById('cfgSavePanel').style.display = 'none';
+  document.getElementById('btnCfgAdd').style.display = '';
+}
+
+function confirmSaveConfig() {
+  const name = document.getElementById('cfgSaveName').value.trim();
+  if (!name) {
+    toast('Please enter a name for this configuration', 'error');
+    document.getElementById('cfgSaveName').focus();
+    return;
+  }
+
+  const config = {
+    name,
+    savedAt:          new Date().toISOString(),
+    category:         state.category,
+    activeSeries:     [...state.activeSeries],
+    seriesTransforms: { ...state.seriesTransforms },
+    fromYear:         parseInt(document.getElementById('fromYear').value),
+    fromMonth:        parseInt(document.getElementById('fromMonth').value),
+    toYear:           parseInt(document.getElementById('toYear').value),
+    toMonth:          parseInt(document.getElementById('toMonth').value),
+    frequency:        document.getElementById('freqSelect').value,
+    formulas:         state.formulas.filter(f => f.expr && f.expr.trim()),
+    chartType:        state.chartType,
+  };
+
+  const encoded = _encodeConfig(config);
+  if (encoded) {
+    window.history.replaceState(null, '', '#cfg=' + encoded);
+    document.title = 'StatCan Social Explorer — ' + name;
+    showBookmarkPrompt(name);
+  }
+  cancelSaveConfig();
+  toast(`"${name}" ready to bookmark ✓`, 'success');
+}
+
+function loadConfigObj(config) {
+  if (!Object.keys(CATEGORIES).length) {
+    toast('Series data not loaded yet — please wait', 'error');
+    return;
+  }
+  if (config.category && !CATEGORIES[config.category]) {
+    toast('Category not found in current series file — the config may need updating', 'error');
+    return;
+  }
+  const missing = (config.activeSeries || []).filter(sid => !SERIES_MAP[sid]);
+  if (missing.length) {
+    toast(`${missing.length} series not found in current data file`, 'error');
+    return;
+  }
+
+  // Restore state
+  // Legacy in-app CIMT categories/series were removed — drop them from any older saved config
+  state.category         = CATEGORIES[config.category] ? config.category : Object.keys(CATEGORIES)[0];
+  state.activeSeries     = [...(config.activeSeries || [])].filter(id => !id.startsWith('cimt_'));
+  state.seriesTransforms = { ...(config.seriesTransforms || {}) };
+  // Backward-compat: older configs stored a single `formula` string.
+  state.formulas = Array.isArray(config.formulas) && config.formulas.length
+    ? config.formulas.map(f => ({ expr: f.expr || '', label: f.label || '' }))
+    : (config.formula ? [{ expr: config.formula, label: '' }] : [{ expr: '', label: '' }]);
+  state.activeFormulaIdx = 0;
+  state.chartType        = config.chartType || 'line';
+  state.rawData          = {};
+  state.processedData    = {};
+  state.seriesUnits      = {};
+  state.formulaResults   = [];
+  state.autoUpdateTo     = false;
+
+  const fy = config.fromYear  || 2024, fm = config.fromMonth || 1;
+  const ty = config.toYear    || new Date().getFullYear(), tm = config.toMonth || 12;
+  state.fromYear = fy; state.fromMonth = fm;
+  state.toYear   = ty; state.toMonth   = tm;
+
+  // Update DOM controls
+  document.getElementById('categorySelect').value = state.category;
+  document.getElementById('fromYear').value   = fy;
+  document.getElementById('fromMonth').value  = fm;
+  document.getElementById('toYear').value     = ty;
+  document.getElementById('toMonth').value    = tm;
+  document.getElementById('freqSelect').value = config.frequency || 'original';
+  renderFormulaRows();
+
+  // Sync chart-type tabs
+  document.querySelectorAll('.tab').forEach(el =>
+    el.classList.toggle('active', el.dataset.chart === state.chartType));
+
+  // Re-render sidebar
+  selectCategory(state.category);
+  hideDimPanel();
+  updateFormulaWarn();
+
+  // Reset chart area
+  if (chartInst) { chartInst.destroy(); chartInst = null; }
+  document.getElementById('chartEmpty').style.display  = 'flex';
+  document.getElementById('myChart').style.display     = 'none';
+  document.getElementById('tableWrap').style.display   = 'none';
+  document.getElementById('exportBtn').style.display   = 'none';
+  document.getElementById('exportChartBtn').style.display = 'none';
+  document.getElementById('toolbarSources').style.display = 'none';
+  document.getElementById('chartTitle').textContent    = `"${config.name}"`;
+  document.getElementById('statusDot').className = 'status-dot';
+  document.getElementById('chartEmpty').querySelector('p').textContent =
+    `${config.activeSeries.length} series selected — fetching latest data…`;
+}
+
+function tryLoadFromUrl() {
+  const hash = window.location.hash;
+  if (!hash.startsWith('#cfg=')) return;
+  const config = _decodeConfig(hash.slice(5));
+  if (!config || !Array.isArray(config.activeSeries)) return;
+  loadConfigObj(config);
+  fetchData();
+}
+
+// ═══════════════════════════════════════════════════════════
+// MOBILE DRAWER (controls sidebar on phones ≤640px)
+// ═══════════════════════════════════════════════════════════
+function toggleDrawer(open) {
+  const want = open === undefined ? !document.body.classList.contains('drawer-open') : open;
+  document.body.classList.toggle('drawer-open', want);
+}
+
+// ═══════════════════════════════════════════════════════════
+// AUTO-LOAD DEFAULT TEMPLATE
+// ═══════════════════════════════════════════════════════════
+async function autoLoadTemplate() {
+  try {
+    // Fast path: pre-built JSON catalog from the proxy. Avoids ~10s of
+    // in-browser XLSX decoding on large catalogs (JSON.parse is ~100x faster).
+    // Fetch the FRED catalog (optional; app works without it) in PARALLEL
+    // with the main catalog so the second request adds no latency.
+    const fredPromise = loadFredCatalog();
+
+    let rows = null;
+    try {
+      const r = await fetch('/api/catalog-rows');
+      if (r.ok) {
+        const j = await r.json();
+        if (Array.isArray(j.rows)) rows = j.rows;
+      }
+    } catch (_) { /* fall through to the XLSX path below */ }
+
+    if (rows) {
+      CATEGORIES = parseRows(rows);
+    } else {
+      // Fallback: decode the raw spreadsheet in-browser (older proxy, or
+      // /api/catalog unavailable).
+      const resp = await fetch('/vectors.xlsx');
+      if (!resp.ok) throw new Error(`Server returned ${resp.status}`);
+      CATEGORIES = parseExcel(XLSX.read(await resp.arrayBuffer(), { type: 'array' }));
+    }
+    await fredPromise;
+    // Seed the default social-topic buckets so the category picker works
+    // even while the catalog is empty (fresh install, pre-Wizard).
+    for (const label of DEFAULT_CATEGORIES) {
+      const id = slugify(label);
+      if (!CATEGORIES[id]) CATEGORIES[id] = { id, label, sourceFreq: 'monthly', series: [] };
+    }
+    buildSeriesMap();
+    const count = Object.values(CATEGORIES).reduce((n, c) => n + c.series.length, 0);
+    activateUI('Vectors.xlsx', count);
+    if (count === 0) {
+      document.getElementById('chartTitle').textContent =
+        'Catalog is empty — add series with the Wizard at /wizard';
+    }
+  } catch (err) {
+    console.error('Failed to load series template:', err);
+    document.getElementById('loadingState').style.display = 'none';
+    document.getElementById('loadErrorState').style.display = '';
+    document.getElementById('loadErrorState').textContent = `Failed to load series data — please try refreshing. (${err.message})`;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════
+(function populateYearSelects() {
+  const currentYear = new Date().getFullYear();
+  const fromSel = document.getElementById('fromYear');
+  const toSel   = document.getElementById('toYear');
+  for (let y = 1946; y <= currentYear + 2; y++) {
+    fromSel.appendChild(new Option(y, y, false, y === 2024));
+    toSel.appendChild(new Option(y, y, false, y === currentYear));
+  }
+})();
+
+autoLoadTemplate();
+</script>
+
+<footer style="
+  text-align: center;
+  padding: 18px 24px;
+  font-size: 11px;
+  color: var(--muted);
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  line-height: 1.7;
+  flex-shrink: 0;
+">
+  Data from Statistics Canada WDS – <a href="https://www.statcan.gc.ca" target="_blank" rel="noopener" style="color: var(--accent); text-decoration: none;">Statcan.gc.ca</a><br>
+  StatCan Social Explorer was created by Claude under direction from Jason Kirby
+</footer>
+
+</body>
+</html>
