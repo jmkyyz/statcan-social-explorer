@@ -768,42 +768,55 @@ def _dim_key(row: dict) -> str:
 # Route: GET /api/catalog
 #   (no params)        → summary: categories + series list
 #   ?series_id=cpi_nsa → that series' rows (for the wizard's extend mode)
+#
+# Answered by STREAMING the workbook (or the warm in-memory parse cache when
+# one exists). A full _read_catalog parse holds ~2KB/row — ~190MB at 90k rows —
+# and on Render the parse is deliberately uncached, so concurrent requests
+# (wizard opens, health checks, polls) used to stack full parses and OOM the
+# 512MB instance. Streaming keeps the per-request peak at a few MB; the tiny
+# summary payload is cached by file mtime and pre-warmed at startup.
 # ---------------------------------------------------------------------------
-@app.route("/api/catalog")
-def get_catalog():
-    try:
-        _, rows = _read_catalog()
-    except Exception as exc:
-        return jsonify({"error": f"Could not read Vectors.xlsx: {exc}"}), 500
+_catalog_summary_cache = None   # (mtime, payload) — small, safe to keep resident
 
-    series_id = request.args.get("series_id", "").strip()
-    if series_id:
-        s_rows = [r for r in rows if r["series_id"] == series_id]
-        if not s_rows:
-            return jsonify({"error": f"series_id '{series_id}' not found"}), 404
-        first = s_rows[0]
-        return jsonify({
-            "seriesId":   series_id,
-            "seriesName": first.get("series_name", ""),
-            "category":   first.get("category", ""),
-            "tableId":    first.get("table_id", ""),
-            "freq":       first.get("freq", "M"),
-            "dimNames":   [first.get(f"dim{i}_name", "") for i in range(1, 6)],
-            "rows": [
-                {
-                    "dimValues": [r.get(f"dim{i}_value", "") for i in range(1, 6)],
-                    "vector":     r.get("vector", ""),
-                    "fullLabel":  r.get("full_label", ""),
-                    "shortLabel": r.get("short_label", ""),
-                    "dim1Group":  r.get("dim1_group", ""),
-                }
-                for r in s_rows
-            ],
-        })
+
+def _iter_catalog_rows():
+    """Yield row-dicts from Vectors.xlsx without materializing the full list."""
+    import openpyxl
+    wb = openpyxl.load_workbook(VECTORS_PATH, read_only=True)
+    try:
+        ws = wb["series"] if "series" in wb.sheetnames else wb[wb.sheetnames[0]]
+        rows_iter = ws.iter_rows(values_only=True)
+        header = [str(h or "").strip() for h in next(rows_iter)]
+        n = len(header)
+        for r in rows_iter:
+            d = {header[i]: ("" if r[i] is None else str(r[i]).strip())
+                 for i in range(min(n, len(r)))}
+            if d.get("series_id"):
+                yield d
+    finally:
+        wb.close()
+
+
+def _catalog_rows_source(mtime):
+    """Warm parse cache when fresh (local dev), else a streaming iterator."""
+    if _parsed_catalog is not None and _parsed_catalog[0] == mtime:
+        return _parsed_catalog[2]
+    return _iter_catalog_rows()
+
+
+def _build_catalog_summary():
+    """(Re)build the /api/catalog summary if stale. Returns the payload or None."""
+    global _catalog_summary_cache
+    try:
+        mtime = os.path.getmtime(VECTORS_PATH)
+    except OSError:
+        return None
+    if _catalog_summary_cache is not None and _catalog_summary_cache[0] == mtime:
+        return _catalog_summary_cache[1]
 
     categories: list[str] = []
     series: dict[str, dict] = {}
-    for r in rows:
+    for r in _catalog_rows_source(mtime):
         cat = r.get("category", "")
         if cat and cat not in categories:
             categories.append(cat)
@@ -820,7 +833,47 @@ def get_catalog():
             }
         series[sid]["rowCount"] += 1
 
-    return jsonify({"categories": categories, "series": list(series.values())})
+    payload = {"categories": categories, "series": list(series.values())}
+    _catalog_summary_cache = (mtime, payload)
+    return payload
+
+
+@app.route("/api/catalog")
+def get_catalog():
+    series_id = request.args.get("series_id", "").strip()
+    try:
+        if series_id:
+            mtime = os.path.getmtime(VECTORS_PATH)
+            s_rows = [r for r in _catalog_rows_source(mtime)
+                      if r.get("series_id") == series_id]
+            if not s_rows:
+                return jsonify({"error": f"series_id '{series_id}' not found"}), 404
+            first = s_rows[0]
+            return jsonify({
+                "seriesId":   series_id,
+                "seriesName": first.get("series_name", ""),
+                "category":   first.get("category", ""),
+                "tableId":    first.get("table_id", ""),
+                "freq":       first.get("freq", "M"),
+                "dimNames":   [first.get(f"dim{i}_name", "") for i in range(1, 6)],
+                "rows": [
+                    {
+                        "dimValues": [r.get(f"dim{i}_value", "") for i in range(1, 6)],
+                        "vector":     r.get("vector", ""),
+                        "fullLabel":  r.get("full_label", ""),
+                        "shortLabel": r.get("short_label", ""),
+                        "dim1Group":  r.get("dim1_group", ""),
+                    }
+                    for r in s_rows
+                ],
+            })
+
+        payload = _build_catalog_summary()
+        if payload is None:
+            return jsonify({"error": "Could not read Vectors.xlsx"}), 500
+        return jsonify(payload)
+    except Exception as exc:
+        return jsonify({"error": f"Could not read Vectors.xlsx: {exc}"}), 500
 
 
 # ---------------------------------------------------------------------------
@@ -1239,5 +1292,8 @@ if __name__ == "__main__":
     print("=" * 60)
     # Pre-warm the catalog cache in the background so the first request after a
     # deploy doesn't pay the spreadsheet-parse cost. Port still binds instantly.
-    threading.Thread(target=_build_catalog_cache, daemon=True).start()
+    def _prewarm():
+        _build_catalog_cache()
+        _build_catalog_summary()
+    threading.Thread(target=_prewarm, daemon=True).start()
     app.run(host=host, port=port, debug=False)
