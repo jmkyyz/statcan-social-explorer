@@ -1,9 +1,12 @@
-# Suggested Render config — NOT yet deployed. Review before creating the service.
+# Render config for the LIVE service (statcan-social-explorer → social.jasonkirby.ca).
+# build_catalog_cache.py pre-builds the gzipped catalog cache so a fresh instance
+# answers /api/catalog* instantly instead of parsing Vectors.xlsx for minutes
+# (which hangs past Cloudflare's ~100s timeout after every deploy/restart).
 services:
   - type: web
     name: statcan-social-explorer
     runtime: python
-    buildCommand: pip install -r requirements.txt
+    buildCommand: pip install -r requirements.txt && python build_catalog_cache.py
     startCommand: python proxy.py
     envVars:
       - key: PORT

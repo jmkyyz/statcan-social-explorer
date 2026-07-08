@@ -8,3 +8,6 @@ venv/
 
 # Wizard catalog backups
 backups/
+
+# Deploy-time catalog cache (rebuilt by build_catalog_cache.py in Render's buildCommand)
+catalog_cache/

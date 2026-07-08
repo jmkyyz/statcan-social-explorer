@@ -17,6 +17,7 @@ from __future__ import annotations
 import base64
 import csv
 import gzip
+import hashlib
 import io
 import json
 import os
@@ -530,6 +531,14 @@ def get_table_metadata():
 
 VECTORS_PATH    = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Vectors.xlsx")
 BACKUP_DIR      = os.path.join(os.path.dirname(os.path.abspath(__file__)), "backups")
+# Deploy-time catalog cache (written by build_catalog_cache.py in Render's
+# buildCommand, gitignored). Lets a fresh instance serve /api/catalog and
+# /api/catalog-rows immediately instead of streaming the whole workbook on
+# first request (~minutes on Render's 0.5 vCPU → Cloudflare 100s timeouts).
+CACHE_DIR       = os.path.join(os.path.dirname(os.path.abspath(__file__)), "catalog_cache")
+CACHE_ROWS_GZ   = os.path.join(CACHE_DIR, "catalog-rows.json.gz")
+CACHE_SUMMARY   = os.path.join(CACHE_DIR, "catalog-summary.json")
+CACHE_META      = os.path.join(CACHE_DIR, "meta.json")
 CUBES_CACHE     = "/tmp/statcan_cubes_lite.json"
 CUBES_TTL       = 24 * 3600          # refresh table list daily
 GITHUB_REPO     = os.environ.get("GITHUB_REPO", "jmkyyz/statcan-social-explorer")
@@ -804,6 +813,62 @@ def _catalog_rows_source(mtime):
     return _iter_catalog_rows()
 
 
+def _vectors_fingerprint():
+    """(size, sha256) of Vectors.xlsx — content identity for the disk cache.
+    Keyed by content, not mtime, because git checkout / Render's build snapshot
+    rewrite mtimes; hashing the ~10MB file takes well under a second."""
+    h = hashlib.sha256()
+    with open(VECTORS_PATH, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return os.path.getsize(VECTORS_PATH), h.hexdigest()
+
+
+def _load_disk_cache(mtime):
+    """Populate the in-memory rows-gz and summary caches from the deploy-time
+    disk cache, if it matches the current Vectors.xlsx. True on success."""
+    global _catalog_rows_cache, _catalog_summary_cache
+    try:
+        if not (os.path.exists(CACHE_META) and os.path.exists(CACHE_ROWS_GZ)
+                and os.path.exists(CACHE_SUMMARY)):
+            return False
+        with open(CACHE_META) as f:
+            meta = json.load(f)
+        size, sha = _vectors_fingerprint()
+        if meta.get("size") != size or meta.get("sha256") != sha:
+            return False
+        with open(CACHE_ROWS_GZ, "rb") as f:
+            gz = f.read()
+        with open(CACHE_SUMMARY) as f:
+            summary = json.load(f)
+        _catalog_rows_cache = (mtime, gz)
+        _catalog_summary_cache = (mtime, summary)
+        return True
+    except Exception:
+        return False
+
+
+def write_disk_cache():
+    """Build both catalog caches and persist them to CACHE_DIR. Called by
+    build_catalog_cache.py during Render's buildCommand (and usable locally).
+    Both builds stream the workbook, so peak memory stays a few MB."""
+    cache = _build_catalog_cache()
+    summary = _build_catalog_summary()
+    if cache is None or summary is None:
+        raise RuntimeError(f"Could not build catalog cache from {VECTORS_PATH}")
+    size, sha = _vectors_fingerprint()
+    os.makedirs(CACHE_DIR, exist_ok=True)
+    with open(CACHE_ROWS_GZ, "wb") as f:
+        f.write(cache[1])
+    with open(CACHE_SUMMARY, "w") as f:
+        json.dump(summary, f, separators=(",", ":"))
+    with open(CACHE_META, "w") as f:
+        json.dump({"size": size, "sha256": sha}, f)
+    return {"rows_gz_bytes": len(cache[1]),
+            "series": len(summary["series"]),
+            "categories": len(summary["categories"])}
+
+
 def _build_catalog_summary():
     """(Re)build the /api/catalog summary if stale. Returns the payload or None."""
     global _catalog_summary_cache
@@ -812,6 +877,8 @@ def _build_catalog_summary():
     except OSError:
         return None
     if _catalog_summary_cache is not None and _catalog_summary_cache[0] == mtime:
+        return _catalog_summary_cache[1]
+    if _load_disk_cache(mtime):
         return _catalog_summary_cache[1]
 
     categories: list[str] = []
@@ -890,8 +957,9 @@ _catalog_rows_cache = None   # (mtime, gz_bytes) — gz only; raw JSON (~70MB at
 
 def _build_catalog_cache():
     """(Re)build the gzipped-JSON catalog cache from Vectors.xlsx if stale.
-    Returns (mtime, gz_bytes), or None on failure. Pre-warmed at startup so the
-    first visitor after a deploy doesn't pay the spreadsheet parse.
+    Returns (mtime, gz_bytes), or None on failure. Loads the deploy-time disk
+    cache when it matches (instant), and is pre-warmed at startup, so the first
+    visitor after a deploy never pays the multi-minute spreadsheet parse.
 
     Streams rows straight from the workbook into a gzip writer rather than going
     through _read_catalog. That avoids ever holding the full 131k-row list
@@ -902,6 +970,8 @@ def _build_catalog_cache():
     try:
         mtime = os.path.getmtime(VECTORS_PATH)
         if _catalog_rows_cache is not None and _catalog_rows_cache[0] == mtime:
+            return _catalog_rows_cache
+        if _load_disk_cache(mtime):
             return _catalog_rows_cache
 
         import openpyxl

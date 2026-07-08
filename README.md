@@ -53,8 +53,13 @@ With `GITHUB_TOKEN` set, every catalog write is committed back to the GitHub
 repo (`GITHUB_REPO`, default `jmkyyz/statcan-social-explorer`) so Render
 redeploys and the change survives ephemeral-disk restarts.
 
-## Deployment (not yet done — deliberate)
+## Deployment
 
-Suggested when ready: Render service `statcan-social-explorer`, subdomain
-`social.jasonkirby.ca`. A `render.yaml` is included as a starting point.
-Nothing has been deployed; no DNS has been touched.
+Live on Render (service `statcan-social-explorer`, 512MB Starter) at
+`social.jasonkirby.ca` (Cloudflare CNAME → Render); see `render.yaml`.
+The buildCommand runs `build_catalog_cache.py` to pre-build the gzipped
+catalog cache (`catalog_cache/`, gitignored) — without it, the first
+`/api/catalog*` request after a deploy streams the whole 140k-row
+Vectors.xlsx (~minutes on 0.5 vCPU) and times out behind Cloudflare.
+The server validates the cache against Vectors.xlsx by content hash and
+falls back to streaming if it's missing or stale.
